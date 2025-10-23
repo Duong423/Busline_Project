@@ -71,13 +71,17 @@ public class ReviewServiceImpl extends ReviewService {
                 }
                 final User user = userRepository.findByEmail(email)
                                 .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + email));
-                final boolean canReview = canReview(reviewAddDTO.getTripId());
-                if (!canReview) {
-                        throw new IllegalArgumentException("You cannot review this trip");
-                }
+                
                 final Trip trip = tripRepository.findById(reviewAddDTO.getTripId())
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Trip not found with ID: " + reviewAddDTO.getTripId()));
+                
+                // Detailed validation
+                final String canReviewMessage = canReviewWithReason(reviewAddDTO.getTripId(), email);
+                if (canReviewMessage != null) {
+                        throw new IllegalArgumentException(canReviewMessage);
+                }
+                
                 return toResponseAddDTO(reviewRepository.save(ReviewDTOMapper.toEntity(reviewAddDTO, user, trip)));
         }
 
@@ -195,5 +199,57 @@ public class ReviewServiceImpl extends ReviewService {
                 }
 
                 return tripRepository.isUserCanReviewTrip(tripId, email);
+        }
+        
+        /**
+         * Checks if a user can review a trip and provides detailed reason if not.
+         *
+         * @param tripId the ID of the trip
+         * @param email the email of the user
+         * @return null if user can review, error message otherwise
+         */
+        private String canReviewWithReason(Long tripId, String email) {
+                // Check if trip exists
+                final Trip trip = tripRepository.findById(tripId).orElse(null);
+                if (trip == null) {
+                        return "Trip not found";
+                }
+                
+                // Check if trip status is 'arrived'
+                if (!trip.getStatus().toString().equalsIgnoreCase("arrived")) {
+                        return "You can only review completed trips. This trip status is: " + trip.getStatus();
+                }
+                
+                // Check if user has a booking for this trip
+                final User user = userRepository.findByEmail(email).orElse(null);
+                if (user == null) {
+                        return "User not found";
+                }
+                
+                // Check if user has a completed booking for this trip
+                final boolean hasCompletedBooking = trip.getBookings().stream()
+                        .anyMatch(booking -> booking.getCustomer().getEmail().equals(email) 
+                                && booking.getStatus().toString().equalsIgnoreCase("completed"));
+                
+                if (!hasCompletedBooking) {
+                        final boolean hasBooking = trip.getBookings().stream()
+                                .anyMatch(booking -> booking.getCustomer().getEmail().equals(email));
+                        
+                        if (!hasBooking) {
+                                return "You must have a booking for this trip to leave a review";
+                        } else {
+                                return "Your booking for this trip must be completed before you can leave a review";
+                        }
+                }
+                
+                // Check if user already reviewed this trip
+                final boolean hasReviewed = reviewRepository.findByTripId(tripId).stream()
+                        .anyMatch(review -> review.getCustomer().getEmail().equals(email));
+                
+                if (hasReviewed) {
+                        return "You have already reviewed this trip";
+                }
+                
+                return null; // User can review
         }
 }
