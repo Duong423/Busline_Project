@@ -4,9 +4,11 @@ import com.busify.project.common.dto.response.ApiResponse;
 import com.busify.project.ticket.dto.request.TicketUpdateRequestDTO;
 import com.busify.project.ticket.dto.request.UpdateTicketStatusRequestDTO;
 import com.busify.project.ticket.dto.response.TicketResponseDTO;
+import com.busify.project.ticket.dto.response.TicketSeatStatusReponse;
 import com.busify.project.ticket.dto.response.TicketDetailResponseDTO;
 import com.busify.project.ticket.dto.response.TripPassengerListResponseDTO;
 import com.busify.project.ticket.dto.response.BookingTicketsValidationResponseDTO;
+import com.busify.project.ticket.dto.response.TicketBySeat;
 import com.busify.project.ticket.dto.response.UpdateTicketStatusResponseDTO;
 import com.busify.project.ticket.enums.SellMethod;
 import org.springframework.data.domain.Page;
@@ -49,4 +51,6 @@ public interface TicketService {
 
     // Get Ticket by operator ID
     List<TicketResponseDTO> getTicketByOperatorId(Long operatorId);
+    TicketBySeat getTicketByTripIdAndSeatNumber(Long tripId, String seatNumber);
+    List<TicketSeatStatusReponse> getTicketSeatStatusByTripId(Long tripId);
 }

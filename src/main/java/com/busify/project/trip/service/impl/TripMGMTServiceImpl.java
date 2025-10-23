@@ -295,12 +295,12 @@ public class TripMGMTServiceImpl implements TripMGMTService {
             TripStatus newStatus = requestDTO.getStatus();
 
             // Nếu muốn set sang ARRIVED thì phải >= estimatedArrivalTime
-            if (newStatus == TripStatus.arrived) {
-                if (trip.getEstimatedArrivalTime() == null ||
-                        Instant.now().isBefore(trip.getEstimatedArrivalTime())) {
-                    throw TripOperationException.cannotArriveBeforeArrivalTime();
-                }
-            }
+//            if (newStatus == TripStatus.arrived) {
+//                if (trip.getEstimatedArrivalTime() == null ||
+//                        Instant.now().isBefore(trip.getEstimatedArrivalTime())) {
+//                    throw TripOperationException.cannotArriveBeforeArrivalTime();
+//                }
+//            }
 
             trip.setStatus(newStatus);
         }
@@ -312,7 +312,6 @@ public class TripMGMTServiceImpl implements TripMGMTService {
         Trip updatedTrip = tripRepository.save(trip);
         return TripMGMTMapper.toTripDetailResponseDTO(updatedTrip);
     }
-
 
     @Override
     public TripDeleteResponseDTO deleteTrip(Long id, boolean isDelete) {

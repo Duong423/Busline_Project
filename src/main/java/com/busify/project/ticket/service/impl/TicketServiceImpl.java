@@ -12,8 +12,10 @@ import com.busify.project.ticket.dto.request.TicketUpdateRequestDTO;
 import com.busify.project.ticket.dto.request.UpdateTicketStatusRequestDTO;
 import com.busify.project.ticket.dto.response.TicketDetailResponseDTO;
 import com.busify.project.ticket.dto.response.TicketResponseDTO;
+import com.busify.project.ticket.dto.response.TicketSeatStatusReponse;
 import com.busify.project.ticket.dto.response.TripPassengerListResponseDTO;
 import com.busify.project.ticket.dto.response.BookingTicketsValidationResponseDTO;
+import com.busify.project.ticket.dto.response.TicketBySeat;
 import com.busify.project.ticket.dto.response.UpdateTicketStatusResponseDTO;
 import com.busify.project.ticket.entity.Tickets;
 import com.busify.project.ticket.enums.SellMethod;
@@ -589,5 +591,27 @@ public class TicketServiceImpl implements TicketService {
         return tickets.stream()
                 .map(ticketMapper::toTicketResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public TicketBySeat getTicketByTripIdAndSeatNumber(Long tripId, String seatNumber) {
+        Tickets ticket = ticketRepository.findByTripIdAndSeatNumber(tripId, seatNumber)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Không tìm thấy vé với số ghế " + seatNumber + " trong chuyến đi " + tripId));
+        return new TicketBySeat(
+                ticket.getTicketId(),
+                ticket.getPassengerName(),
+                ticket.getPassengerPhone(),
+                ticket.getPrice(),
+                ticket.getSeatNumber(),
+                ticket.getStatus().name(),
+                ticket.getTicketCode(),
+                ticket.getBooking().getId(),
+                "");
+    }
+
+    @Override
+    public List<TicketSeatStatusReponse> getTicketSeatStatusByTripId(Long tripId) {
+        return ticketRepository.getTicketSeatStatusByTripId(tripId);
     }
 }
