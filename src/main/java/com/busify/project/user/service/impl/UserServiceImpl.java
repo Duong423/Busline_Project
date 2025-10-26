@@ -112,7 +112,8 @@ public class UserServiceImpl implements UserService {
         return UserMapper.toDTO(profile);
     }
 
-    @Cacheable(value = "userProfile", key = "'current_user'")
+    // Cache removed - this endpoint depends on dynamic JWT token
+    // Using static cache key 'current_user' caused issues where different users got same cached data
     @Override
     public UserDTO getUserProfile() {
         String email = utils.getCurrentUserLogin().isPresent() ? utils.getCurrentUserLogin().get() : "";

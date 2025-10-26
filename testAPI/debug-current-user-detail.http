@@ -1,0 +1,11 @@
+### Debug current user profile
+GET http://localhost:8080/api/users/profile
+Authorization: Bearer {{token}}
+
+###
+
+### Debug - Check current authentication details
+GET http://localhost:8080/api/users/debug/current-auth
+Authorization: Bearer {{token}}
+
+###

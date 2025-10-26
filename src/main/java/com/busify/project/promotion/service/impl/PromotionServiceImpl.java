@@ -429,7 +429,18 @@ public class PromotionServiceImpl implements PromotionService {
                 .findAvailablePromotionForUser(userId, promotionCode);
 
         if (userPromotion.isEmpty()) {
-            return false;
+            // Nếu user chưa claim promotion, tự động claim cho user (không bắt buộc điều kiện)
+            try {
+                autoClaimPromotionForUser(userId, promotionCode);
+                // Sau khi claim, kiểm tra lại
+                userPromotion = userPromotionRepository.findAvailablePromotionForUser(userId, promotionCode);
+                if (userPromotion.isEmpty()) {
+                    return false;
+                }
+            } catch (Exception e) {
+                log.error("Failed to auto-claim promotion for user {}: {}", userId, e.getMessage());
+                return false;
+            }
         }
 
         Promotion promotion = userPromotion.get().getPromotion();
@@ -442,10 +453,22 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     public void markPromotionAsUsed(Long userId, String promotionCode) {
-        UserPromotion userPromotion = userPromotionRepository
-                .findAvailablePromotionForUser(userId, promotionCode)
-                .orElseThrow(() -> new RuntimeException("Promotion not available for this user"));
+        // Tìm user và promotion
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
+        
+        Promotion promotion = promotionRepository.findByCode(promotionCode)
+                .orElseThrow(() -> new RuntimeException("Promotion not found with code: " + promotionCode));
+        
+        // Get or create UserPromotion (tự động tạo nếu là AUTO promotion)
+        UserPromotion userPromotion = getOrCreateUserPromotion(user, promotion);
+        
+        // Check if already used
+        if (userPromotion.getIsUsed()) {
+            throw new RuntimeException("Promotion has already been used");
+        }
 
+        // Mark as used
         userPromotion.markAsUsed();
         userPromotionRepository.save(userPromotion);
 
@@ -537,13 +560,42 @@ public class PromotionServiceImpl implements PromotionService {
         Promotion promotion = promotionRepository.findByCode(promotionCode)
                 .orElseThrow(() -> new RuntimeException("Promotion code '" + promotionCode + "' not found"));
 
+        // Tìm user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
+
         // Validate promotion
         validatePromotionConditions(promotion, orderValue);
 
         if (promotion.getPromotionType() == PromotionType.coupon) {
-            // COUPON: check user đã claim và chưa sử dụng
+            // COUPON: Tự động claim nếu user chưa có, sau đó check có thể sử dụng
+            if (!userPromotionRepository.existsByUserIdAndPromotionId(userId, promotion.getPromotionId())) {
+                try {
+                    autoClaimPromotionForUser(userId, promotionCode);
+                } catch (Exception e) {
+                    log.error("Failed to auto-claim promotion for user {}: {}", userId, e.getMessage());
+                    throw new RuntimeException("Cannot claim promotion: " + e.getMessage());
+                }
+            }
+            
             if (!canUsePromotion(userId, promotionCode)) {
                 throw new RuntimeException("Promotion not available for this user");
+            }
+        } else if (promotion.getPromotionType() == PromotionType.auto) {
+            // AUTO: Get or create UserPromotion automatically
+            UserPromotion userPromotion = getOrCreateUserPromotion(user, promotion);
+            
+            // AUTO: check user chưa sử dụng promotion này (1 lần/user)
+            if (userPromotion.getIsUsed()) {
+                throw new RuntimeException("You have already used this promotion");
+            }
+
+            // AUTO: check tất cả conditions đã được meet chưa (nếu có conditions)
+            List<PromotionCondition> conditions = promotionConditionRepository
+                    .findPromotionByPromotionId(promotion.getPromotionId());
+            
+            if (!conditions.isEmpty() && !areAllConditionsMet(userId, promotion.getPromotionId())) {
+                throw new RuntimeException("All promotion conditions must be met before applying this promotion");
             }
         }
 
@@ -591,22 +643,41 @@ public class PromotionServiceImpl implements PromotionService {
         Promotion promotion = promotionRepository.findById(promotionId)
                 .orElseThrow(() -> new RuntimeException("Promotion not found with ID: " + promotionId));
 
+        // Tìm user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
+
         // Validate promotion
         validatePromotionConditions(promotion, orderValue);
 
         if (promotion.getPromotionType() == PromotionType.coupon) {
-            // COUPON: check user đã claim và chưa sử dụng
+            // COUPON: Tự động claim nếu user chưa có, sau đó check có thể sử dụng
+            if (!userPromotionRepository.existsByUserIdAndPromotionId(userId, promotion.getPromotionId())) {
+                try {
+                    autoClaimPromotionForUser(userId, promotion.getCode());
+                } catch (Exception e) {
+                    log.error("Failed to auto-claim promotion for user {}: {}", userId, e.getMessage());
+                    throw new RuntimeException("Cannot claim promotion: " + e.getMessage());
+                }
+            }
+            
             if (!canUsePromotion(userId, promotion.getCode())) {
                 throw new RuntimeException("Promotion not available for this user");
             }
         } else if (promotion.getPromotionType() == PromotionType.auto) {
+            // AUTO: Get or create UserPromotion automatically
+            UserPromotion userPromotion = getOrCreateUserPromotion(user, promotion);
+            
             // AUTO: check user chưa sử dụng promotion này (1 lần/user)
-            if (hasUserUsedAutoPromotion(userId, promotion.getPromotionId())) {
+            if (userPromotion.getIsUsed()) {
                 throw new RuntimeException("You have already used this promotion");
             }
 
-            // AUTO: check tất cả conditions đã được meet chưa
-            if (!areAllConditionsMet(userId, promotion.getPromotionId())) {
+            // AUTO: check tất cả conditions đã được meet chưa (nếu có conditions)
+            List<PromotionCondition> conditions = promotionConditionRepository
+                    .findPromotionByPromotionId(promotion.getPromotionId());
+            
+            if (!conditions.isEmpty() && !areAllConditionsMet(userId, promotion.getPromotionId())) {
                 throw new RuntimeException("All promotion conditions must be met before applying this promotion");
             }
         }
@@ -615,11 +686,79 @@ public class PromotionServiceImpl implements PromotionService {
     }
 
     /**
-     * Check if user has already used an AUTO promotion (1 time per user limit)
+     * Get or create UserPromotion for a user and promotion
+     * For AUTO promotions: automatically creates UserPromotion if not exists
+     * For COUPON promotions: requires manual claim first
      */
-    private boolean hasUserUsedAutoPromotion(Long userId, Long promotionId) {
-        // Check if user has a used record for this AUTO promotion
-        return userPromotionRepository.existsByUserIdAndPromotionIdAndIsUsed(userId, promotionId, true);
+    private UserPromotion getOrCreateUserPromotion(User user, Promotion promotion) {
+        // Try to find existing UserPromotion
+        Optional<UserPromotion> existingUserPromotion = userPromotionRepository
+                .findByUserIdAndPromotionId(user.getId(), promotion.getPromotionId());
+        
+        if (existingUserPromotion.isPresent()) {
+            return existingUserPromotion.get();
+        }
+        
+        // If not exists and promotion type is AUTO, create automatically
+        if (promotion.getPromotionType() == PromotionType.auto) {
+            log.info("Auto-creating UserPromotion for AUTO promotion {} and user {}", 
+                    promotion.getPromotionId(), user.getId());
+            
+            UserPromotion newUserPromotion = new UserPromotion((Profile) user, promotion);
+            return userPromotionRepository.save(newUserPromotion);
+        }
+        
+        // For COUPON type, throw error - user must claim first
+        throw new RuntimeException("User must claim this promotion before using it");
+    }
+
+    /**
+     * Tự động claim promotion cho user mà không cần điều kiện (cho phép tất cả user sử dụng promotion)
+     */
+    private void autoClaimPromotionForUser(Long userId, String promotionCode) {
+        log.info("Auto-claiming promotion {} for user {}", promotionCode, userId);
+        
+        // Tìm user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
+
+        // Tìm promotion
+        Promotion promotion = promotionRepository.findByCode(promotionCode)
+                .orElseThrow(() -> new RuntimeException("Promotion not found with code: " + promotionCode));
+
+        // Kiểm tra promotion còn hiệu lực
+        if (promotion.getStatus() != PromotionStatus.active) {
+            throw new RuntimeException("Promotion is not active");
+        }
+
+        if (promotion.getEndDate().isBefore(LocalDate.now())) {
+            throw new RuntimeException("Promotion has expired");
+        }
+
+        if (promotion.getStartDate().isAfter(LocalDate.now())) {
+            throw new RuntimeException("Promotion is not yet available");
+        }
+
+        // Kiểm tra user đã claim promotion này chưa
+        if (userPromotionRepository.existsByUserIdAndPromotionId(user.getId(), promotion.getPromotionId())) {
+            log.debug("User {} already claimed promotion {}", userId, promotionCode);
+            return; // Đã claim rồi thì không cần claim lại
+        }
+
+        // Kiểm tra usage limit (chỉ check khi có giới hạn)
+        if (promotion.getUsageLimit() != null && promotion.getUsageLimit() > 0) {
+            long usedCount = userPromotionRepository.countUsedByPromotionId(promotion.getPromotionId());
+            if (usedCount >= promotion.getUsageLimit()) {
+                throw new RuntimeException("Promotion usage limit reached");
+            }
+        }
+
+        // KHÔNG kiểm tra điều kiện - tự động claim cho user để họ có thể sử dụng
+        // Claim promotion cho user
+        UserPromotion userPromotion = new UserPromotion((Profile) user, promotion);
+        userPromotionRepository.save(userPromotion);
+        
+        log.info("Successfully auto-claimed promotion {} for user {}", promotionCode, userId);
     }
 
     @Override
@@ -990,5 +1129,11 @@ public class PromotionServiceImpl implements PromotionService {
             System.out.println(
                     "Deleted " + userConditions.size() + " user progress records for condition " + conditionId);
         }
+    }
+
+    @Override
+    public void releaseUnpaidPromotions() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'releaseUnpaidPromotions'");
     }
 }

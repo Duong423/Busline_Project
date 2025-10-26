@@ -71,4 +71,6 @@ public interface PromotionService {
     List<UserPromotionConditionResponseDTO> getAllUserPromotionConditions();
 
     List<PromotionResponseDTO> getAutoPromotionsWithCompletedConditions();
+
+    void releaseUnpaidPromotions();
 }

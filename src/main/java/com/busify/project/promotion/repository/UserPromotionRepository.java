@@ -57,4 +57,9 @@ public interface UserPromotionRepository extends JpaRepository<UserPromotion, Us
         @Query("SELECT up FROM UserPromotion up WHERE up.user.id = :userId AND up.promotion.promotionId = :promotionId AND up.isUsed = false AND up.promotion.promotionType = PromotionType.auto")
         UserPromotion findByUserIdAndPromotionIdAndIsUsed(@Param("userId") Long userId,
                         @Param("promotionId") Long promotionId);
+
+        // Find UserPromotion by User and Promotion (for getOrCreate pattern)
+        @Query("SELECT up FROM UserPromotion up WHERE up.user.id = :userId AND up.promotion.promotionId = :promotionId")
+        Optional<UserPromotion> findByUserIdAndPromotionId(@Param("userId") Long userId,
+                        @Param("promotionId") Long promotionId);
 }
