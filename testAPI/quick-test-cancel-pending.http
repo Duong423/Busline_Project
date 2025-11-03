@@ -1,0 +1,93 @@
+### ============================================
+### QUICK TEST - Cancel Pending Booking API
+### ============================================
+
+### Bước 1: Tạo booking trước
+POST http://localhost:8080/api/bookings
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "tripId": 1,
+  "seatNumber": "A1,A2",
+  "totalAmount": 200000,
+  "guestFullName": "Test User",
+  "guestPhone": "0901234567",
+  "guestEmail": "test@example.com",
+  "guestAddress": "Test Address"
+}
+
+### Response sẽ trả về bookingCode, ví dụ: "BK001234"
+### Copy bookingCode đó và paste vào request tiếp theo
+
+###
+
+### Bước 2: Cancel booking ngay lập tức
+### Thay YOUR_BOOKING_CODE bằng mã booking từ bước 1
+POST http://localhost:8080/api/bookings/YOUR_BOOKING_CODE/cancel-pending
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+Content-Type: application/json
+
+###
+
+### Bước 3: Kiểm tra booking đã bị cancel chưa
+GET http://localhost:8080/api/bookings/YOUR_BOOKING_CODE
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+
+### Expected: status = "canceled_by_user"
+
+###
+
+### ============================================
+### TEST VỚI BOOKING THẬT
+### ============================================
+
+### Test với booking code thực tế trong database
+POST http://localhost:8080/api/bookings/BK001234/cancel-pending
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+
+###
+
+### ============================================
+### EXPECTED RESPONSES
+### ============================================
+
+### Success (200 OK):
+# {
+#   "code": 200,
+#   "message": "Hủy booking thành công",
+#   "result": {
+#     "bookingCode": "BK001234",
+#     "status": "cancelled",
+#     "releasedSeats": "A1,A2"
+#   }
+# }
+
+### Error - Booking Not Found (404):
+# {
+#   "code": 404,
+#   "message": "Không tìm thấy booking: BK001234"
+# }
+
+### Error - Already Paid (400):
+# {
+#   "code": 400,
+#   "message": "Không thể hủy booking đã thanh toán thành công"
+# }
+
+### Error - Already Cancelled (400):
+# {
+#   "code": 400,
+#   "message": "Booking đã được hủy trước đó"
+# }
+
+###
+
+### ============================================
+### LƯU Ý
+### ============================================
+# 1. Thay YOUR_ACCESS_TOKEN_HERE bằng token thật từ localStorage
+# 2. Thay YOUR_BOOKING_CODE bằng mã booking thật
+# 3. Kiểm tra backend đang chạy ở port 8080
+# 4. Sau khi cancel, check database xem ghế đã available chưa
+###

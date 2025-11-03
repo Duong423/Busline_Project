@@ -1,0 +1,113 @@
+### ==============================================
+### CANCEL PENDING BOOKING API TESTS
+### ==============================================
+
+@baseUrl = http://localhost:8080/api
+@bookingCode = BK001234
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+### ==============================================
+### 1. Cancel Pending Booking - Success Case
+### ==============================================
+POST {{baseUrl}}/bookings/{{bookingCode}}/cancel-pending
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+###
+
+### ==============================================
+### 2. Cancel Pending Booking - Booking Not Found
+### ==============================================
+POST {{baseUrl}}/bookings/INVALID_CODE/cancel-pending
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+###
+
+### ==============================================
+### 3. Cancel Pending Booking - Already Cancelled
+### (Test với booking đã bị cancel trước đó)
+### ==============================================
+POST {{baseUrl}}/bookings/BK_ALREADY_CANCELLED/cancel-pending
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+###
+
+### ==============================================
+### 4. Cancel Pending Booking - Already Paid
+### (Test với booking đã thanh toán thành công)
+### ==============================================
+POST {{baseUrl}}/bookings/BK_ALREADY_PAID/cancel-pending
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+###
+
+### ==============================================
+### 5. Cancel Pending Booking - Unauthorized
+### (Test không có token)
+### ==============================================
+POST {{baseUrl}}/bookings/{{bookingCode}}/cancel-pending
+Content-Type: application/json
+
+###
+
+### ==============================================
+### 6. Full Flow Test: Create → Cancel
+### ==============================================
+
+# Step 1: Create a booking first
+POST {{baseUrl}}/bookings
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "tripId": 1,
+  "seatNumber": "A1,A2",
+  "totalAmount": 200000,
+  "guestFullName": "Nguyen Van A",
+  "guestPhone": "0901234567",
+  "guestEmail": "test@example.com",
+  "guestAddress": "123 Test Street"
+}
+
+###
+
+# Step 2: Get the booking code from response above and cancel it
+# Replace {{newBookingCode}} with actual code from step 1
+POST {{baseUrl}}/bookings/{{newBookingCode}}/cancel-pending
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+###
+
+# Step 3: Verify booking was cancelled - Get booking detail
+GET {{baseUrl}}/bookings/{{newBookingCode}}
+Authorization: Bearer {{accessToken}}
+
+###
+
+# Step 4: Check seat status - Should be available again
+GET {{baseUrl}}/trips/1/seats
+Authorization: Bearer {{accessToken}}
+
+###
+
+### ==============================================
+### NOTES FOR TESTING:
+### ==============================================
+# 1. Replace {{accessToken}} with a valid JWT token
+# 2. Replace {{bookingCode}} with an actual booking code from your system
+# 3. For full flow test:
+#    - Run Step 1 to create booking
+#    - Copy bookingCode from response
+#    - Paste into Step 2 and run
+#    - Verify with Step 3 and 4
+#
+# Expected Results:
+# - Success: HTTP 200, booking cancelled, seats released
+# - Not Found: HTTP 404
+# - Forbidden: HTTP 403
+# - Bad Request: HTTP 400 (already paid/cancelled)
+###

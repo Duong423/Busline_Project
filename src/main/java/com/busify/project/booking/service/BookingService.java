@@ -38,6 +38,9 @@ public interface BookingService {
 
     boolean deleteBooking(String bookingCode);
 
+    // Hủy booking ngay lập tức khi người dùng rời khỏi trang thanh toán (chưa thanh toán)
+    ApiResponse<?> cancelPendingBooking(String bookingCode);
+
     // Lấy số lượng khách hàng theo trạng thái booking cho biểu đồ tròn
     List<BookingStatusCountDTO> getBookingStatusCounts();
 

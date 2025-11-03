@@ -139,6 +139,13 @@ public class BookingController {
         }
     }
 
+    @PostMapping("/{bookingCode}/cancel-pending")
+    @Operation(summary = "Cancel pending booking immediately when user leaves payment page", 
+               description = "Hủy booking ngay lập tức khi người dùng rời khỏi trang thanh toán (chưa thanh toán). Ghế sẽ được nhả ra ngay lập tức.")
+    public ApiResponse<?> cancelPendingBooking(@PathVariable String bookingCode) {
+        return bookingService.cancelPendingBooking(bookingCode);
+    }
+
     @GetMapping("/admin/booking-status-counts")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get booking status counts (Admin only)")

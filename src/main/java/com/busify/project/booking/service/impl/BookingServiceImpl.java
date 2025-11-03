@@ -736,4 +736,104 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.findGuestsByOperator(operatorId);
     }
 
+    /**
+     * Hủy booking ngay lập tức khi người dùng rời khỏi trang thanh toán (chưa thanh toán)
+     * Được gọi từ frontend khi người dùng nhấn nút "Quay lại" hoặc rời khỏi trang thanh toán
+     */
+    @Override
+    @Transactional
+    public ApiResponse<?> cancelPendingBooking(String bookingCode) {
+        try {
+            // 1. Lấy thông tin user hiện tại
+            String email = jwtUtil.getCurrentUserLogin()
+                    .orElse(null);
+
+            // 2. Tìm booking
+            Bookings booking = bookingRepository.findByBookingCode(bookingCode)
+                    .orElseThrow(() -> new BookingNotFoundException(bookingCode));
+
+            // 3. Kiểm tra quyền sở hữu (chỉ cho phép chủ booking hoặc guest booking hủy)
+            if (email != null) {
+                User user = userRepository.findByEmail(email).orElse(null);
+                if (user != null && booking.getCustomer() != null) {
+                    if (!booking.getCustomer().getId().equals(user.getId())) {
+                        return ApiResponse.error(403, "Bạn không có quyền hủy booking này");
+                    }
+                }
+            }
+
+            // 4. Kiểm tra trạng thái booking - chỉ hủy được nếu chưa thanh toán
+            if (booking.getPayment() != null && booking.getPayment().getStatus() == PaymentStatus.completed) {
+                return ApiResponse.error(400, "Không thể hủy booking đã thanh toán thành công");
+            }
+
+            // 5. Kiểm tra nếu booking đã bị hủy rồi
+            if (booking.getStatus() == BookingStatus.canceled_by_user || 
+                booking.getStatus() == BookingStatus.canceled_by_operator) {
+                return ApiResponse.error(400, "Booking đã được hủy trước đó");
+            }
+
+            // 6. Cancel scheduled release task (nếu có)
+            seatReleaseService.cancelReleaseTask(booking.getId());
+            log.info("Cancelled scheduled release task for booking: {}", booking.getId());
+
+            // 7. Release seats ngay lập tức
+            String[] seatNumbers = booking.getSeatNumber().split(",");
+            for (String seatNum : seatNumbers) {
+                tripSeatRepository.findTripSeatBySeatNumberAndTripId(
+                        seatNum.trim(), booking.getTrip().getId())
+                    .ifPresent(seat -> {
+                        if (seat.getStatus() == TripSeatStatus.locked) {
+                            seat.setStatus(TripSeatStatus.available);
+                            seat.setLockingUser(null);
+                            seat.setLockedAt(null);
+                            tripSeatRepository.save(seat);
+                            log.info("Released seat {} immediately for cancelled booking {}", 
+                                    seat.getId().getSeatNumber(), booking.getId());
+                        }
+                    });
+            }
+
+            // 8. Cập nhật trạng thái booking
+            booking.setStatus(BookingStatus.canceled_by_user);
+            
+            // 9. Xóa thông tin promotion đã apply (vì chưa thanh toán nên promotion chưa được sử dụng thực sự)
+            booking.setAppliedDiscountCode(null);
+            booking.setAppliedPromotionId(null);
+            
+            bookingRepository.save(booking);
+
+            // 10. Ghi audit log
+            if (email != null) {
+                User user = userRepository.findByEmail(email).orElse(null);
+                if (user != null) {
+                    AuditLog auditLog = new AuditLog();
+                    auditLog.setAction("CANCEL_PENDING_BOOKING");
+                    auditLog.setTargetEntity("BOOKING");
+                    auditLog.setTargetId(booking.getId());
+                    auditLog.setDetails(String.format(
+                            "{\"booking_code\":\"%s\", \"reason\":\"User left payment page\", \"seats\":\"%s\"}",
+                            booking.getBookingCode(), booking.getSeatNumber()));
+                    auditLog.setUser(user);
+                    auditLogService.save(auditLog);
+                }
+            }
+
+            log.info("Successfully cancelled pending booking {} and released seats", bookingCode);
+
+            return ApiResponse.success("Hủy booking thành công", Map.of(
+                    "bookingCode", bookingCode,
+                    "status", "cancelled",
+                    "releasedSeats", booking.getSeatNumber()
+            ));
+
+        } catch (BookingNotFoundException e) {
+            log.error("Booking not found: {}", bookingCode);
+            return ApiResponse.error(404, "Không tìm thấy booking: " + bookingCode);
+        } catch (Exception e) {
+            log.error("Error cancelling pending booking {}: {}", bookingCode, e.getMessage(), e);
+            return ApiResponse.error(500, "Lỗi khi hủy booking: " + e.getMessage());
+        }
+    }
+
 }
