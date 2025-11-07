@@ -108,7 +108,7 @@ public class PromotionServiceImpl implements PromotionService {
             System.err.println("Failed to create audit log for promotion creation: " + e.getMessage());
         }
 
-        return PromotionMapper.convertToDTO(savedPromotion);
+        return PromotionMapper.convertToDTO(savedPromotion, userPromotionRepository);
     }
 
     private String generatePromotionCode() {
@@ -126,14 +126,14 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     public PromotionResponseDTO getPromotionById(Long id) {
         Optional<Promotion> promotion = promotionRepository.findById(id);
-        return promotion.map(PromotionMapper::convertToDTO).orElse(null);
+        return promotion.map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository)).orElse(null);
     }
 
     @Override
     public PromotionResponseDTO getPromotionByCode(String code) {
 
         Optional<Promotion> promotion = promotionRepository.findByCode(code);
-        return promotion.map(PromotionMapper::convertToDTO).orElse(null);
+        return promotion.map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository)).orElse(null);
     }
 
     @Override
@@ -141,7 +141,7 @@ public class PromotionServiceImpl implements PromotionService {
 
         List<Promotion> promotions = promotionRepository.findAll();
         return promotions.stream()
-                .map(PromotionMapper::convertToDTO)
+                .map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository))
                 .toList();
     }
 
@@ -157,7 +157,7 @@ public class PromotionServiceImpl implements PromotionService {
 
         // Convert sang DTO
         List<PromotionResponseDTO> promotionDTOs = promotions.getContent().stream()
-                .map(PromotionMapper::convertToDTO)
+                .map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository))
                 .toList();
 
         // Trả về response với thông tin phân trang
@@ -287,7 +287,7 @@ public class PromotionServiceImpl implements PromotionService {
                 System.err.println("Failed to create audit log for promotion update: " + e.getMessage());
             }
 
-            return PromotionMapper.convertToDTO(updated);
+            return PromotionMapper.convertToDTO(updated, userPromotionRepository);
         }
         return null;
     }
@@ -510,7 +510,7 @@ public class PromotionServiceImpl implements PromotionService {
     public List<PromotionResponseDTO> findActiveAutoPromotions(BigDecimal orderValue) {
         List<Promotion> autoPromotions = promotionRepository.findActiveAutoPromotions(orderValue);
         return autoPromotions.stream()
-                .map(PromotionMapper::convertToDTO)
+                .map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository))
                 .toList();
     }
 
@@ -524,7 +524,7 @@ public class PromotionServiceImpl implements PromotionService {
 
         // Trả về promotion đầu tiên (đã được sort theo priority và discount value)
         Promotion bestPromotion = autoPromotions.get(0);
-        return PromotionMapper.convertToDTO(bestPromotion);
+        return PromotionMapper.convertToDTO(bestPromotion, userPromotionRepository);
     }
 
     @Override
@@ -541,13 +541,16 @@ public class PromotionServiceImpl implements PromotionService {
         validatePromotionConditions(promotion, orderValue);
 
         if (promotion.getPromotionType() == PromotionType.coupon) {
-            // COUPON: check user đã claim và chưa sử dụng
+            // COUPON: Tự động claim nếu user chưa claim
+            autoClaimCouponIfNeeded(userId, promotion);
+            
+            // Check user đã claim và chưa sử dụng
             if (!canUsePromotion(userId, promotionCode)) {
                 throw new RuntimeException("Promotion not available for this user");
             }
         }
 
-        return PromotionMapper.convertToDTO(promotion);
+        return PromotionMapper.convertToDTO(promotion, userPromotionRepository);
     }
 
     private void validatePromotionConditions(Promotion promotion, BigDecimal orderValue) {
@@ -595,7 +598,10 @@ public class PromotionServiceImpl implements PromotionService {
         validatePromotionConditions(promotion, orderValue);
 
         if (promotion.getPromotionType() == PromotionType.coupon) {
-            // COUPON: check user đã claim và chưa sử dụng
+            // COUPON: Tự động claim nếu user chưa claim
+            autoClaimCouponIfNeeded(userId, promotion);
+            
+            // Check user đã claim và chưa sử dụng
             if (!canUsePromotion(userId, promotion.getCode())) {
                 throw new RuntimeException("Promotion not available for this user");
             }
@@ -611,7 +617,7 @@ public class PromotionServiceImpl implements PromotionService {
             }
         }
 
-        return PromotionMapper.convertToDTO(promotion);
+        return PromotionMapper.convertToDTO(promotion, userPromotionRepository);
     }
 
     /**
@@ -654,7 +660,7 @@ public class PromotionServiceImpl implements PromotionService {
     public List<PromotionResponseDTO> getAllCurrentPromotions() {
         List<Promotion> currentPromotions = promotionRepository.findAllCurrentPromotions();
         return currentPromotions.stream()
-                .map(PromotionMapper::convertToDTO)
+                .map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository))
                 .toList();
     }
 
@@ -828,7 +834,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .findAutoPromotionsWithCompletedConditionsForUser(userId);
 
         return eligiblePromotions.stream()
-                .map(PromotionMapper::convertToDTO)
+                .map(p -> PromotionMapper.convertToDTO(p, userPromotionRepository))
                 .toList();
     }
 
@@ -1000,6 +1006,56 @@ public class PromotionServiceImpl implements PromotionService {
             userPromotionConditionRepository.deleteAll(userConditions);
             System.out.println(
                     "Deleted " + userConditions.size() + " user progress records for condition " + conditionId);
+        }
+    }
+
+    /**
+     * Tự động claim COUPON cho user nếu chưa claim
+     * - Chỉ áp dụng cho promotion type = COUPON
+     * - Kiểm tra user chưa claim promotion này
+     * - Kiểm tra usage limit (nếu có)
+     */
+    private void autoClaimCouponIfNeeded(Long userId, Promotion promotion) {
+        // Check nếu user đã claim rồi thì bỏ qua
+        if (userPromotionRepository.existsByUserIdAndPromotionId(userId, promotion.getPromotionId())) {
+            return;
+        }
+
+        // Check usage limit (nếu có)
+        if (promotion.getUsageLimit() != null && promotion.getUsageLimit() > 0) {
+            long usedCount = userPromotionRepository.countUsedByPromotionId(promotion.getPromotionId());
+            if (usedCount >= promotion.getUsageLimit()) {
+                throw new RuntimeException("Promotion usage limit reached");
+            }
+        }
+
+        // Get user profile
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
+
+        if (!(user instanceof Profile profile)) {
+            throw new RuntimeException("User must be a Profile instance for claiming promotion");
+        }
+
+        // Tự động claim cho user
+        UserPromotion userPromotion = new UserPromotion(profile, promotion);
+        userPromotionRepository.save(userPromotion);
+
+        log.info("Auto-claimed COUPON promotion '{}' for user {}", promotion.getCode(), userId);
+
+        // Create audit log for auto-claim
+        try {
+            AuditLog auditLog = new AuditLog();
+            auditLog.setAction("AUTO_CLAIM_COUPON");
+            auditLog.setTargetEntity("USER_PROMOTION");
+            auditLog.setTargetId(promotion.getPromotionId());
+            auditLog.setDetails(String.format(
+                    "{\"user_id\":%d,\"promotion_id\":%d,\"promotion_code\":\"%s\",\"discount_value\":%.2f,\"action\":\"auto_claim_coupon_on_use\"}",
+                    userId, promotion.getPromotionId(), promotion.getCode(), promotion.getDiscountValue()));
+            auditLog.setUser(profile);
+            auditLogService.save(auditLog);
+        } catch (Exception e) {
+            log.error("Failed to create audit log for auto-claim coupon: {}", e.getMessage());
         }
     }
 }

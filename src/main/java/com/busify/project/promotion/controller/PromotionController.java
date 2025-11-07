@@ -44,13 +44,25 @@ public class PromotionController {
                 .build();
     }
 
-    @Operation(summary = "Get promotion by ID")
-    @GetMapping("/{id}")
-    public ApiResponse<PromotionResponseDTO> getPromotionById(@PathVariable Long id) {
-        PromotionResponseDTO promotion = promotionService.getPromotionById(id);
-        return ApiResponse.<PromotionResponseDTO>builder()
-                .code(promotion != null ? HttpStatus.OK.value() : HttpStatus.NOT_FOUND.value())
-                .result(promotion)
+    // ============ Specific endpoints MUST come BEFORE path variable endpoints ============
+    
+    @Operation(summary = "Get all promotions")
+    @GetMapping
+    public ApiResponse<List<PromotionResponseDTO>> getAllPromotions() {
+        List<PromotionResponseDTO> promotions = promotionService.getAllPromotions();
+        return ApiResponse.<List<PromotionResponseDTO>>builder()
+                .code(HttpStatus.OK.value())
+                .result(promotions)
+                .build();
+    }
+
+    @Operation(summary = "Get all current promotions (active and within date range)")
+    @GetMapping({"/current", "/current-promotions"})
+    public ApiResponse<List<PromotionResponseDTO>> getAllCurrentPromotions() {
+        List<PromotionResponseDTO> currentPromotions = promotionService.getAllCurrentPromotions();
+        return ApiResponse.<List<PromotionResponseDTO>>builder()
+                .code(HttpStatus.OK.value())
+                .result(currentPromotions)
                 .build();
     }
 
@@ -61,16 +73,6 @@ public class PromotionController {
         return ApiResponse.<PromotionResponseDTO>builder()
                 .code(promotion != null ? HttpStatus.OK.value() : HttpStatus.NOT_FOUND.value())
                 .result(promotion)
-                .build();
-    }
-
-    @Operation(summary = "Get all promotions")
-    @GetMapping
-    public ApiResponse<List<PromotionResponseDTO>> getAllPromotions() {
-        List<PromotionResponseDTO> promotions = promotionService.getAllPromotions();
-        return ApiResponse.<List<PromotionResponseDTO>>builder()
-                .code(HttpStatus.OK.value())
-                .result(promotions)
                 .build();
     }
 
@@ -96,27 +98,6 @@ public class PromotionController {
         } catch (Exception e) {
             return ApiResponse.internalServerError("Đã xảy ra lỗi khi lọc promotion: " + e.getMessage());
         }
-    }
-
-    @Operation(summary = "Update promotion by ID")
-    @PutMapping("/{id}")
-    public ApiResponse<PromotionResponseDTO> updatePromotion(@PathVariable Long id,
-            @Valid @RequestBody PromotionRequesDTO promotion) {
-        PromotionResponseDTO updated = promotionService.updatePromotion(id, promotion);
-        return ApiResponse.<PromotionResponseDTO>builder()
-                .code(updated != null ? HttpStatus.OK.value() : HttpStatus.NOT_FOUND.value())
-                .result(updated)
-                .build();
-    }
-
-    @Operation(summary = "Delete promotion by ID")
-    @DeleteMapping("/{id}")
-    public ApiResponse<Void> deletePromotion(@PathVariable Long id) {
-        promotionService.deletePromotion(id);
-        return ApiResponse.<Void>builder()
-                .code(HttpStatus.NO_CONTENT.value())
-                .message("Promotion deleted successfully")
-                .build();
     }
 
     @Operation(summary = "Get user's promotions by user ID")
@@ -149,53 +130,6 @@ public class PromotionController {
                 .build();
     }
 
-    @Operation(summary = "Mark promotion as used")
-    @PostMapping("/use/{userId}/{code}")
-    public ApiResponse<Void> markPromotionAsUsed(@PathVariable Long userId, @PathVariable String code) {
-        try {
-            promotionService.markPromotionAsUsed(userId, code);
-            return ApiResponse.<Void>builder()
-                    .code(HttpStatus.OK.value())
-                    .message("Promotion marked as used")
-                    .build();
-        } catch (RuntimeException e) {
-            return ApiResponse.<Void>builder()
-                    .code(HttpStatus.BAD_REQUEST.value())
-                    .message(e.getMessage())
-                    .build();
-        }
-    }
-
-    @Operation(summary = "Get all current promotions")
-    @GetMapping("/current-promotions")
-    public ApiResponse<List<PromotionResponseDTO>> getAllCurrentPromotions() {
-        List<PromotionResponseDTO> currentPromotions = promotionService.getAllCurrentPromotions();
-        return ApiResponse.<List<PromotionResponseDTO>>builder()
-                .code(HttpStatus.OK.value())
-                .result(currentPromotions)
-                .build();
-    }
-
-    @Operation(summary = "Get promotion conditions")
-    @GetMapping("/{promotionId}/conditions")
-    public ApiResponse<List<PromotionConditionResponseDTO>> getPromotionConditions(@PathVariable Long promotionId) {
-        List<PromotionConditionResponseDTO> conditions = promotionService.getPromotionConditions(promotionId);
-        return ApiResponse.<List<PromotionConditionResponseDTO>>builder()
-                .code(HttpStatus.OK.value())
-                .result(conditions)
-                .build();
-    }
-
-    @Operation(summary = "Update condition progress")
-    @PostMapping("/condition/{conditionId}/progress")
-    public ApiResponse<Void> updateConditionProgress(@PathVariable Long conditionId, @RequestBody String progressData) {
-        promotionService.updateConditionProgress(conditionId, progressData);
-        return ApiResponse.<Void>builder()
-                .code(HttpStatus.OK.value())
-                .message("Condition progress updated")
-                .build();
-    }
-
     @Operation(summary = "Get all user promotion conditions")
     @GetMapping("/user/conditions")
     public ApiResponse<List<UserPromotionConditionResponseDTO>> getAllUserPromotionConditions() {
@@ -214,5 +148,79 @@ public class PromotionController {
                 .code(HttpStatus.OK.value())
                 .result(eligiblePromotions)
                 .build();
+    }
+
+    // ============ Path variable endpoints MUST come LAST ============
+
+    @Operation(summary = "Get promotion by ID")
+    @GetMapping("/{id}")
+    public ApiResponse<PromotionResponseDTO> getPromotionById(@PathVariable Long id) {
+        PromotionResponseDTO promotion = promotionService.getPromotionById(id);
+        return ApiResponse.<PromotionResponseDTO>builder()
+                .code(promotion != null ? HttpStatus.OK.value() : HttpStatus.NOT_FOUND.value())
+                .result(promotion)
+                .build();
+    }
+
+    @Operation(summary = "Get promotion conditions")
+    @GetMapping("/{promotionId}/conditions")
+    public ApiResponse<List<PromotionConditionResponseDTO>> getPromotionConditions(@PathVariable Long promotionId) {
+        List<PromotionConditionResponseDTO> conditions = promotionService.getPromotionConditions(promotionId);
+        return ApiResponse.<List<PromotionConditionResponseDTO>>builder()
+                .code(HttpStatus.OK.value())
+                .result(conditions)
+                .build();
+    }
+
+    @Operation(summary = "Update promotion by ID")
+    @PutMapping("/{id}")
+    public ApiResponse<PromotionResponseDTO> updatePromotion(@PathVariable Long id,
+            @Valid @RequestBody PromotionRequesDTO promotion) {
+        PromotionResponseDTO updated = promotionService.updatePromotion(id, promotion);
+        return ApiResponse.<PromotionResponseDTO>builder()
+                .code(updated != null ? HttpStatus.OK.value() : HttpStatus.NOT_FOUND.value())
+                .result(updated)
+                .build();
+    }
+
+    @Operation(summary = "Delete promotion by ID")
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> deletePromotion(@PathVariable Long id) {
+        promotionService.deletePromotion(id);
+        return ApiResponse.<Void>builder()
+                .code(HttpStatus.NO_CONTENT.value())
+                .message("Promotion deleted successfully")
+                .build();
+    }
+
+    // ============ POST endpoints ============
+
+    // ============ POST endpoints ============
+
+    @Operation(summary = "Update condition progress")
+    @PostMapping("/condition/{conditionId}/progress")
+    public ApiResponse<Void> updateConditionProgress(@PathVariable Long conditionId, @RequestBody String progressData) {
+        promotionService.updateConditionProgress(conditionId, progressData);
+        return ApiResponse.<Void>builder()
+                .code(HttpStatus.OK.value())
+                .message("Condition progress updated")
+                .build();
+    }
+
+    @Operation(summary = "Mark promotion as used")
+    @PostMapping("/use/{userId}/{code}")
+    public ApiResponse<Void> markPromotionAsUsed(@PathVariable Long userId, @PathVariable String code) {
+        try {
+            promotionService.markPromotionAsUsed(userId, code);
+            return ApiResponse.<Void>builder()
+                    .code(HttpStatus.OK.value())
+                    .message("Promotion marked as used")
+                    .build();
+        } catch (RuntimeException e) {
+            return ApiResponse.<Void>builder()
+                    .code(HttpStatus.BAD_REQUEST.value())
+                    .message(e.getMessage())
+                    .build();
+        }
     }
 }

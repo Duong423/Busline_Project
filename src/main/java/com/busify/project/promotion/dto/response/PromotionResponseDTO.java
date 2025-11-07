@@ -20,6 +20,8 @@ public class PromotionResponseDTO {
     private LocalDate startDate;
     private LocalDate endDate;
     private Integer usageLimit;
+    private Long usedCount; // Số lượng voucher đã sử dụng
+    private Long remainingCount; // Số lượng voucher còn lại (null nếu không giới hạn)
     private PromotionStatus status;
     private Integer priority;
     private Long campaignId;

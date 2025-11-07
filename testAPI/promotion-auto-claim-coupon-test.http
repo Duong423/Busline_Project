@@ -1,0 +1,46 @@
+### Test Auto-Claim COUPON Logic
+### Khi user apply promotion code COUPON mà chưa claim, hệ thống sẽ tự động claim cho user
+
+### 1. Login để lấy JWT token
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nguyentoduong.2019@gmail.com",
+  "password": "your_password_here"
+}
+
+### 2. Apply COUPON promotion code (sẽ tự động claim nếu chưa claim)
+POST http://localhost:8080/api/bookings
+Content-Type: application/json
+Authorization: Bearer {{jwt_token}}
+
+{
+  "tripId": 58,
+  "guestFullName": "NGUYỄN TỐ DƯƠNG",
+  "guestEmail": "duongnt.21it@vku.udn.vn",
+  "guestPhone": "0123456789",
+  "discountCode": "7VHB9F",
+  "seatNumber": "D.3.1",
+  "totalAmount": 535000
+}
+
+### 3. Kiểm tra danh sách promotions đã claim của user
+GET http://localhost:8080/api/promotions/user/my-promotions
+Authorization: Bearer {{jwt_token}}
+
+### 4. Kiểm tra promotions available (chưa sử dụng)
+GET http://localhost:8080/api/promotions/user/available-promotions?userId=30
+Authorization: Bearer {{jwt_token}}
+
+### 5. Kiểm tra promotions đã sử dụng
+GET http://localhost:8080/api/promotions/user/used-promotions
+Authorization: Bearer {{jwt_token}}
+
+### Notes:
+### - Khi user apply promotion code lần đầu tiên, hệ thống sẽ:
+###   1. Kiểm tra promotion còn hiệu lực
+###   2. Kiểm tra usage limit
+###   3. TỰ ĐỘNG claim cho user (nếu chưa claim)
+###   4. Apply promotion vào booking
+### - Lần sử dụng tiếp theo với cùng promotion code sẽ báo lỗi "already used"

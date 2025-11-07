@@ -3,9 +3,14 @@ package com.busify.project.promotion.mapper;
 import com.busify.project.promotion.dto.request.PromotionRequesDTO;
 import com.busify.project.promotion.dto.response.PromotionResponseDTO;
 import com.busify.project.promotion.entity.Promotion;
+import com.busify.project.promotion.repository.UserPromotionRepository;
 
 public class PromotionMapper {
     public static PromotionResponseDTO convertToDTO(Promotion promotion) {
+        return convertToDTO(promotion, null);
+    }
+
+    public static PromotionResponseDTO convertToDTO(Promotion promotion, UserPromotionRepository userPromotionRepository) {
         if (promotion == null) {
             return null;
         }
@@ -21,6 +26,21 @@ public class PromotionMapper {
         dto.setEndDate(promotion.getEndDate());
         dto.setUsageLimit(promotion.getUsageLimit());
         dto.setPriority(promotion.getPriority());
+        
+        // Calculate used and remaining count if repository is provided
+        if (userPromotionRepository != null) {
+            long usedCount = userPromotionRepository.countUsedByPromotionId(promotion.getPromotionId());
+            dto.setUsedCount(usedCount);
+            
+            // Calculate remaining count only if usageLimit is set
+            if (promotion.getUsageLimit() != null && promotion.getUsageLimit() > 0) {
+                long remaining = Math.max(0, promotion.getUsageLimit() - usedCount);
+                dto.setRemainingCount(remaining);
+            } else {
+                dto.setRemainingCount(null); // Unlimited
+            }
+        }
+        
         dto.setConditions(promotion.getConditions().stream()
                 .map(PromotionConditionMapper::toResponseDTO)
                 .toList());

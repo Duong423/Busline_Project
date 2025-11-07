@@ -1,0 +1,60 @@
+### Test promotion with usage count
+### Get promotion by ID (should show usedCount and remainingCount)
+GET http://localhost:8080/api/promotions/1
+Content-Type: application/json
+
+###
+
+### Get promotion by code (should show usedCount and remainingCount)
+GET http://localhost:8080/api/promotions/code/SUMMER2024
+Content-Type: application/json
+
+###
+
+### Get all promotions (should show usedCount and remainingCount for each)
+GET http://localhost:8080/api/promotions
+Content-Type: application/json
+
+###
+
+### Filter promotions with pagination (should show usedCount and remainingCount)
+POST http://localhost:8080/api/promotions/filter?page=1&size=10
+Content-Type: application/json
+
+{
+  "status": "active",
+  "promotionType": "coupon"
+}
+
+###
+
+### Get all current promotions - New endpoint (should show usedCount and remainingCount)
+GET http://localhost:8080/api/promotions/current
+Content-Type: application/json
+
+###
+
+### Get all current promotions - Old endpoint (should show usedCount and remainingCount)
+GET http://localhost:8080/api/promotions/current-promotions
+Content-Type: application/json
+
+###
+
+### Expected Response Format:
+### {
+###   "id": 1,
+###   "code": "SUMMER2024",
+###   "discountType": "PERCENTAGE",
+###   "promotionType": "coupon",
+###   "discountValue": 20.00,
+###   "minOrderValue": 100000.00,
+###   "startDate": "2024-01-01",
+###   "endDate": "2024-12-31",
+###   "usageLimit": 100,           // Tổng số voucher có thể sử dụng
+###   "usedCount": 35,              // Số voucher đã sử dụng
+###   "remainingCount": 65,         // Số voucher còn lại (usageLimit - usedCount)
+###   "status": "active",
+###   "priority": 1,
+###   "campaignId": null,
+###   "conditions": []
+### }
