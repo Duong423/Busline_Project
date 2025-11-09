@@ -26,7 +26,7 @@ public class ChatAssignmentService {
     private final SimpMessagingTemplate messagingTemplate;
 
     private static final Integer CUSTOMER_SERVICE_ROLE_ID = 11;
-    private static final int MAX_CHATS_PER_AGENT = 10; // Tăng giới hạn từ 5 lên 10
+    private static final int MAX_CHATS_PER_AGENT = 50; // Tăng giới hạn lên 50
     private final AtomicInteger roundRobinCounter = new AtomicInteger(0);
 
     /**
@@ -67,7 +67,11 @@ public class ChatAssignmentService {
                 .recipient(assignmentMessageDTO.getRecipient())
                 .type(assignmentMessageDTO.getType())
                 .roomId(roomId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(assignmentMessageDTO.getTimestamp() != null ? 
+                    java.time.Instant.ofEpochMilli(assignmentMessageDTO.getTimestamp())
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDateTime() : 
+                    LocalDateTime.now())
                 .build();
 
         // 3. Lưu và gửi tin nhắn

@@ -1,0 +1,119 @@
+### Smart Chatbot API Tests
+### Test the new smart chatbot endpoints with product search
+
+### 1. Simple search query
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Tìm vé đi Đà Nẵng"
+}
+
+### 2. Complete search query
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Tìm vé từ Hà Nội đến Đà Nẵng ngày mai, 2 vé VIP"
+}
+
+### 3. Price inquiry
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Giá vé Hà Nội Đà Nẵng bao nhiêu?"
+}
+
+### 4. Schedule inquiry
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Xe đi Sài Gòn mấy giờ?"
+}
+
+### 5. Booking request
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Tôi muốn đặt vé đi Nha Trang"
+}
+
+### 6. General question
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Chính sách hủy vé như thế nào?"
+}
+
+### 7. Multiple conditions
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Tìm xe giường nằm đi Đà Lạt ngày 15/11 giá dưới 300k"
+}
+
+### 8. Natural language
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "content": "Cho tôi xem các chuyến xe từ Hà Nội về Hải Phòng vào thứ 7 tuần sau"
+}
+
+### 9. Check AI status
+GET http://localhost:8080/api/ai-chat/status
+
+### 10. Start AI chat (get welcome message)
+POST http://localhost:8080/api/ai-chat/start
+Content-Type: application/json
+
+### Expected Response Structure:
+# {
+#   "status": "success",
+#   "message": "Tin nhắn đã được xử lý thành công",
+#   "data": {
+#     "content": "AI response text...",
+#     "type": "PRODUCT_SEARCH",  // or TEXT, BOOKING_GUIDE, ERROR, NEED_MORE_INFO
+#     "searchIntent": {
+#       "intentType": "SEARCH_TRIP",
+#       "departure": "Hà Nội",
+#       "destination": "Đà Nẵng",
+#       "departureDate": "2025-11-10",
+#       "numberOfTickets": 2,
+#       "busType": "VIP",
+#       "confidence": 0.9
+#     },
+#     "trips": [
+#       {
+#         "tripId": 1,
+#         "routeName": "Hà Nội - Đà Nẵng",
+#         "departureLocation": "Hà Nội",
+#         "arrivalLocation": "Đà Nẵng",
+#         "departureTime": "2025-11-10T08:00:00",
+#         "arrivalTime": "2025-11-10T14:30:00",
+#         "price": 350000,
+#         "availableSeats": 12,
+#         "busType": "VIP",
+#         "busPlate": "29A-12345",
+#         "amenities": ["WiFi", "Điều hòa", "Nước uống miễn phí"],
+#         "rating": 4.5,
+#         "hasPromotion": true,
+#         "discountedPrice": 315000,
+#         "imageUrl": "/images/bus-vip.jpg"
+#       }
+#     ],
+#     "totalResults": 5,
+#     "needMoreInfo": false,
+#     "suggestedQuestions": [
+#       "Chuyến nào rẻ nhất?",
+#       "Xe VIP có không?",
+#       "Còn ghế trống không?"
+#     ],
+#     "timestamp": 1699520000000
+#   }
+# }

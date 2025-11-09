@@ -78,6 +78,16 @@ public class OpenRouterService {
     public String getChatCompletion(String apiKey, String model, List<Message> messages, 
                                    Integer maxTokens, Double temperature) {
         try {
+            // Validate API key
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                log.warn("⚠️ OpenRouter API key is null or empty, skipping AI call");
+                return null;
+            }
+            
+            log.info("🔑 Using API key: {}...{}", 
+                apiKey.substring(0, Math.min(10, apiKey.length())), 
+                apiKey.length() > 10 ? apiKey.substring(apiKey.length() - 4) : "");
+            
             WebClient webClient = WebClient.builder()
                 .baseUrl(OPENROUTER_BASE_URL)
                 .defaultHeader("Authorization", "Bearer " + apiKey)

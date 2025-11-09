@@ -51,7 +51,10 @@ import java.util.logging.Logger;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Service
+@Slf4j
 public class TripServiceImpl implements TripService {
 
     @Autowired
@@ -195,8 +198,20 @@ public class TripServiceImpl implements TripService {
 
     public List<TripFilterResponseDTO> searchTrips(Instant departureDate, Instant untilTime, Integer availableSeats,
             Long startLocation, Long endLocation, TripStatus status) {
+        log.info("🔍 TripServiceImpl.searchTrips() called with: departureDate={}, untilTime={}, seats={}, startLoc={}, endLoc={}, status={}", 
+            departureDate, untilTime, availableSeats, startLocation, endLocation, status);
+        
         List<Trip> trips = tripRepository.searchTrips(departureDate, untilTime, startLocation, endLocation, status,
                 availableSeats);
+        
+        log.info("📊 TripRepository returned {} trips", trips.size());
+        if (!trips.isEmpty()) {
+            log.info("📋 First trip: id={}, route={}, departure={}", 
+                trips.get(0).getId(), 
+                trips.get(0).getRoute().getName(),
+                trips.get(0).getDepartureTime());
+        }
+        
         return trips.stream()
                 .map(trip -> TripMapper.toDTO(trip, getAverageRating(trip.getId()), bookingRepository))
                 .collect(Collectors.toList());

@@ -1,0 +1,35 @@
+### Test Smart Chatbot - Đà Lạt đi Huế ngày 9-11
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "sender": "test_user",
+  "content": "đà lạt đi huế 9-11",
+  "type": "CHAT"
+}
+
+###
+
+### Test Smart Chatbot - Đà Lạt đi Huế ngày 9/11/2025
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "sender": "test_user",
+  "content": "Tìm vé từ Đà Lạt đi Huế ngày 9/11/2025",
+  "type": "CHAT"
+}
+
+###
+
+### Test Smart Chatbot - Chi tiết hơn
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "sender": "test_user",
+  "content": "Cho tôi tìm chuyến xe từ Đà Lạt đến Huế vào ngày 9 tháng 11",
+  "type": "CHAT"
+}
+
+###

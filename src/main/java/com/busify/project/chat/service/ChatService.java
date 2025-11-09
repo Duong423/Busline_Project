@@ -14,7 +14,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -99,7 +101,11 @@ public class ChatService {
                 .recipient(recipient) // Sử dụng recipient đã được set tự động
                 .type(chatMessageDTO.getType())
                 .roomId(roomId) // Sẽ là null nếu là chat 1-1
-                .timestamp(LocalDateTime.now())
+                .timestamp(chatMessageDTO.getTimestamp() != null ? 
+                    Instant.ofEpochMilli(chatMessageDTO.getTimestamp())
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime() : 
+                    LocalDateTime.now())
                 .build();
         ChatMessage savedMessage = chatMessageRepository.save(message);
         
@@ -128,7 +134,11 @@ public class ChatService {
                 .recipient(chatMessageDTO.getRecipient())
                 .type(chatMessageDTO.getType())
                 .roomId(roomId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(chatMessageDTO.getTimestamp() != null ? 
+                    Instant.ofEpochMilli(chatMessageDTO.getTimestamp())
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime() : 
+                    LocalDateTime.now())
                 .build();
         
         ChatMessage savedMessage = chatMessageRepository.save(message);
@@ -156,14 +166,18 @@ public class ChatService {
         return !history.isEmpty();
     }
 
-    public ChatMessage saveAutomaticMessage(ChatMessageDTO chatMessageDTO, String roomId) {
+    public ChatMessage saveUserMessage(ChatMessageDTO chatMessageDTO, String roomId) {
         ChatMessage message = ChatMessage.builder()
                 .content(chatMessageDTO.getContent())
                 .sender(chatMessageDTO.getSender())
                 .recipient(chatMessageDTO.getRecipient())
                 .type(chatMessageDTO.getType())
                 .roomId(roomId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(chatMessageDTO.getTimestamp() != null ? 
+                    Instant.ofEpochMilli(chatMessageDTO.getTimestamp())
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime() : 
+                    LocalDateTime.now())
                 .build();
         return chatMessageRepository.save(message);
     }
@@ -299,7 +313,7 @@ public class ChatService {
                 .sender(message.getSender())
                 .contentPreview(contentPreview)
                 .type(message.getType().toString())
-                .timestamp(message.getTimestamp().toString()) // Chuyển sang ISO nếu cần
+                .timestamp(message.getTimestamp().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() + "") // Convert LocalDateTime to timestamp string
                 .build();
 
         // Lấy danh sách người nhận (đối với group chat: tất cả trừ sender; private:

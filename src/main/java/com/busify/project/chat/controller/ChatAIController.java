@@ -14,11 +14,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.busify.project.chat.dto.AIResponseDTO;
 import com.busify.project.chat.dto.ChatMessageDTO;
 import com.busify.project.chat.model.ChatMessage;
 import com.busify.project.chat.service.ChatBotService;
 import com.busify.project.chat.service.ChatService;
 import com.busify.project.chat.service.OpenAIService;
+import com.busify.project.chat.service.SmartChatBotService;
 import com.busify.project.common.dto.response.ApiResponse;
 import com.busify.project.common.utils.JwtUtils;
 
@@ -36,6 +38,7 @@ public class ChatAIController {
     private final ChatBotService chatBotService;
     private final JwtUtils jwtUtils;
     private final OpenAIService openAIService;
+    private final SmartChatBotService smartChatBotService;
 
     /**
      * Xử lý tin nhắn chat với AI qua WebSocket.
@@ -233,6 +236,77 @@ public class ChatAIController {
         } catch (Exception e) {
             log.error("Error checking OpenAI status", e);
             return ApiResponse.internalServerError("Lỗi khi kiểm tra trạng thái OpenAI: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ======= SMART CHATBOT ENDPOINTS =======
+     * API mới với khả năng tìm kiếm sản phẩm thông minh
+     */
+
+    /**
+     * Gửi tin nhắn thông minh - Trả về kèm kết quả tìm kiếm sản phẩm
+     */
+    @PostMapping("/smart/send")
+    public ApiResponse<AIResponseDTO> sendSmartMessage(@RequestBody ChatMessageDTO chatMessage) {
+        try {
+            String currentUser = jwtUtils.getCurrentUserLogin().orElse("anonymous");
+            
+            log.info("Smart chat: Received message from user: {}", currentUser);
+
+            // ✅ Validate message content
+            if (chatMessage.getContent() == null || chatMessage.getContent().trim().isEmpty()) {
+                log.warn("⚠️ Empty message received from user: {}", currentUser);
+                return ApiResponse.badRequest("Tin nhắn không được để trống");
+            }
+
+            // Xử lý tin nhắn bằng SmartChatBot
+            AIResponseDTO aiResponse = smartChatBotService.processSmartMessage(
+                chatMessage.getContent().trim(), 
+                currentUser
+            );
+
+            log.info("Smart chat: Response type: {}, Total results: {}", 
+                aiResponse.getType(), aiResponse.getTotalResults());
+
+            return ApiResponse.success("Tin nhắn đã được xử lý thành công", aiResponse);
+
+        } catch (Exception e) {
+            log.error("Error in smart chat", e);
+            return ApiResponse.internalServerError("Lỗi khi xử lý tin nhắn: " + e.getMessage());
+        }
+    }
+
+    /**
+     * WebSocket endpoint cho smart chat
+     */
+    @MessageMapping("/chat.smart/{userId}")
+    public void smartChatWithAI(@DestinationVariable String userId, @Payload ChatMessageDTO chatMessage) {
+        try {
+            log.info("Smart WebSocket: Received message from user: {}", chatMessage.getSender());
+
+            // Xử lý tin nhắn bằng SmartChatBot
+            AIResponseDTO aiResponse = smartChatBotService.processSmartMessage(
+                chatMessage.getContent(), 
+                chatMessage.getSender()
+            );
+
+            // Gửi response qua WebSocket
+            messagingTemplate.convertAndSend("/topic/smart/" + userId, aiResponse);
+            
+            log.info("Smart WebSocket: Sent response to /topic/smart/{}", userId);
+
+        } catch (Exception e) {
+            log.error("Error in smart WebSocket chat", e);
+            
+            // Gửi error response
+            AIResponseDTO errorResponse = AIResponseDTO.builder()
+                .type(AIResponseDTO.ResponseType.ERROR)
+                .content("Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.")
+                .timestamp(System.currentTimeMillis())
+                .build();
+            
+            messagingTemplate.convertAndSend("/topic/smart/" + userId, errorResponse);
         }
     }
 }

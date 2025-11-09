@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Configuration;
 public class OpenAIConfig {
     
     private String key;
-    private String model = "meta-llama/llama-3.3-8b-instruct:free";
+    private String model = "google/gemini-2.5-flash"; // ✅ Gemini 2.5 Flash - Latest version
     private int timeout = 30;
     private int maxTokens = 500;
     private double temperature = 0.7;

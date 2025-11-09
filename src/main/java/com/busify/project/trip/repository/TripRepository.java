@@ -237,7 +237,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                 SELECT t FROM Trip t
                 JOIN FETCH t.bus b
                 WHERE (:departureDate IS NULL OR t.departureTime >= :departureDate)
-                  AND (:untilTime IS NULL OR t.estimatedArrivalTime < :untilTime)
+                  AND (:untilTime IS NULL OR t.departureTime < :untilTime)
                   AND (:startLocation IS NULL OR t.route.startLocation.id = :startLocation)
                   AND (:endLocation IS NULL OR t.route.endLocation.id = :endLocation)
                   AND (:status IS NULL OR t.status = :status)

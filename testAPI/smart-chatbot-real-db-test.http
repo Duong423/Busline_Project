@@ -1,0 +1,217 @@
+### Smart Chatbot - Real Database Integration Tests
+
+### 1. Simple Trip Search (Hà Nội to Đà Nẵng)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_001",
+  "message": "Tìm vé từ Hà Nội đến Đà Nẵng ngày mai"
+}
+
+###
+
+### 2. Search with Number of Tickets
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_002",
+  "message": "Cho tôi 4 vé đi Sài Gòn từ Đà Lạt vào ngày 30/1"
+}
+
+###
+
+### 3. Conversational Search
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_003",
+  "message": "Mình muốn đi Nha Trang cuối tuần này, có chuyến nào không?"
+}
+
+###
+
+### 4. Search with Specific Date Format
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_004",
+  "message": "Tìm chuyến đi Huế vào ngày 25/01/2025"
+}
+
+###
+
+### 5. General Question (Should Return Text Response)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_005",
+  "message": "Làm sao để đặt vé?"
+}
+
+###
+
+### 6. Price Range Question (Intent Extraction Test)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_006",
+  "message": "Tìm vé đi Vũng Tàu giá dưới 200 nghìn"
+}
+
+###
+
+### 7. Multi-criteria Search
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_007",
+  "message": "Cần 3 vé đi Đà Lạt từ TP.HCM ngày 28/1, loại xe VIP"
+}
+
+###
+
+### 8. Weekend Search (Relative Date)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_008",
+  "message": "Có chuyến nào đi Phú Quốc cuối tuần này không?"
+}
+
+###
+
+### 9. Today Search
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_009",
+  "message": "Tìm vé đi Cần Thơ hôm nay"
+}
+
+###
+
+### 10. Follow-up Question (Trip Details)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_010",
+  "message": "Cho tôi biết thêm về chuyến số 123"
+}
+
+###
+
+### 11. Empty Destination (Should Handle Error)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_011",
+  "message": "Tôi muốn đi du lịch"
+}
+
+###
+
+### 12. Round Trip Question
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_012",
+  "message": "Tìm vé khứ hồi Hà Nội - Đà Nẵng"
+}
+
+###
+
+### 13. Check Available Locations (Database Test)
+# This will test if location search works
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_013",
+  "message": "Có chuyến nào từ Bến Tre không?"
+}
+
+###
+
+### 14. Morning Preference
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+
+{
+  "userId": "test_user_014",
+  "message": "Tìm chuyến sáng sớm đi Quy Nhơn từ Hà Nội"
+}
+
+###
+
+### 15. Test WebSocket Connection Status
+# Use this to verify WebSocket is working
+GET http://localhost:8080/api/ai-chat/status
+Accept: application/json
+
+###
+
+### Expected Responses Format:
+
+### TEXT Response (for general questions):
+# {
+#   "content": "Để đặt vé, bạn có thể...",
+#   "type": "TEXT",
+#   "trips": [],
+#   "suggestedQuestions": ["Tìm vé đi đâu?", "Giá vé như thế nào?"]
+# }
+
+### PRODUCT_SEARCH Response (for trip searches):
+# {
+#   "content": "Tôi đã tìm thấy 3 chuyến xe phù hợp...",
+#   "type": "PRODUCT_SEARCH",
+#   "trips": [
+#     {
+#       "tripId": 123,
+#       "routeName": "Hà Nội - Đà Nẵng",
+#       "departureLocation": "Hà Nội",
+#       "arrivalLocation": "Đà Nẵng",
+#       "departureTime": "2025-01-25T08:00:00",
+#       "arrivalTime": "2025-01-25T14:30:00",
+#       "price": 350000.0,
+#       "availableSeats": 12,
+#       "busType": "VIP",
+#       "amenities": ["WiFi", "Điều hòa", "Nước uống"],
+#       "rating": 4.5,
+#       "hasPromotion": false,
+#       "imageUrl": "https://..."
+#     }
+#   ],
+#   "suggestedQuestions": [
+#     "Chuyến nào rẻ nhất?",
+#     "Chuyến nào đi sớm nhất?"
+#   ]
+# }
+
+### ERROR Response (when something goes wrong):
+# {
+#   "content": "Xin lỗi, tôi không tìm thấy chuyến nào phù hợp...",
+#   "type": "ERROR",
+#   "trips": [],
+#   "suggestedQuestions": ["Thử tìm tuyến khác?"]
+# }
+
+###
+
+### Notes:
+# 1. Make sure application is running: mvn spring-boot:run
+# 2. Database should have real trip data
+# 3. OpenRouter API key should be configured
+# 4. Check logs for intent extraction results
+# 5. Verify location names match database entries
