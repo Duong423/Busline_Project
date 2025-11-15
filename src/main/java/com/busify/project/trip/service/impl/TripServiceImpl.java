@@ -86,6 +86,7 @@ public class TripServiceImpl implements TripService {
     public List<TripFilterResponseDTO> getAllTrips() {
         return tripRepository.findAll()
                 .stream()
+                .filter(trip -> trip.getStatus() != TripStatus.cancelled)
                 .map(trip -> TripMapper.toDTO(trip, getAverageRating(trip.getId()), bookingRepository))
                 .collect(Collectors.toList());
     }
@@ -110,6 +111,7 @@ public class TripServiceImpl implements TripService {
         List<TripFilterResponseDTO> result = tripRepository
                 .findUpcomingTripsByDriverId(currentUser.getId(), currentTime)
                 .stream()
+                .filter(trip -> trip.getStatus() != TripStatus.cancelled)
                 .map(trip -> TripMapper.toDTO(trip, getAverageRating(trip.getId()), bookingRepository))
                 .collect(Collectors.toList());
 
@@ -213,6 +215,7 @@ public class TripServiceImpl implements TripService {
         }
         
         return trips.stream()
+                .filter(trip -> trip.getStatus() != TripStatus.cancelled)
                 .map(trip -> TripMapper.toDTO(trip, getAverageRating(trip.getId()), bookingRepository))
                 .collect(Collectors.toList());
     }
@@ -236,7 +239,7 @@ public class TripServiceImpl implements TripService {
 
         for (TopOperatorRatingDTO operator : operators) {
             Trip trip = tripRepository.findUpcomingTripsByOperator(operator.getOperatorId(), Instant.now());
-            if (trip != null) {
+            if (trip != null && trip.getStatus() != TripStatus.cancelled) {
                 trips.add(trip);
             }
         }
@@ -269,6 +272,21 @@ public class TripServiceImpl implements TripService {
     @Override
     public Map<String, Object> getTripDetailById(Long tripId) {
         try {
+            // Kiểm tra xem chuyến đi có tồn tại không
+            Trip trip = tripRepository.findById(tripId)
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy chuyến đi với ID: " + tripId));
+            
+            // Kiểm tra trạng thái chuyến đi
+            if (trip.getStatus() == TripStatus.cancelled) {
+                throw new IllegalStateException("Chuyến đi này đã bị hủy và không thể xem chi tiết");
+            }
+            
+            // Kiểm tra nếu chuyến đi đã quá thời gian khởi hành nhưng chưa được cập nhật status
+            if (trip.getDepartureTime().isBefore(Instant.now()) && 
+                (trip.getStatus() == TripStatus.on_sell || trip.getStatus() == TripStatus.scheduled)) {
+                throw new IllegalStateException("Chuyến đi này đã quá thời gian khởi hành");
+            }
+            
             // get trip detail by ID
             TripDetailResponse tripDetail = tripRepository.findTripDetailById(tripId);
             // get trip stop by ID
@@ -277,6 +295,8 @@ public class TripServiceImpl implements TripService {
             List<BusImageResponse> busImages = tripRepository.findBusImagesByBusId(tripDetail.getBusId());
             // mapper to Map<String, Object> using mapper toTripDetail
             return TripMapper.toTripDetail(tripDetail, tripStops, busImages);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             throw TripOperationException.processingFailed(e);
         }
@@ -299,6 +319,7 @@ public class TripServiceImpl implements TripService {
         Long routeId = trip.getRoute().getId();
         final List<TripFilterResponseDTO> similarTrips = tripRepository.findUpcomingTripsByRouteExcludingTrip(routeId,
                 tripId).stream()
+                .filter(t -> t.getStatus() != TripStatus.cancelled)
                 .map(t -> TripMapper.toDTO(t, getAverageRating(t.getId()), bookingRepository))
                 .collect(Collectors.toList());
         System.out.println("Similar trips found: " + similarTrips.get(0));
@@ -511,6 +532,7 @@ public class TripServiceImpl implements TripService {
 
         return tripRepository.findUpcomingTripsByDriverId(driverId, currentTime)
                 .stream()
+                .filter(trip -> trip.getStatus() != TripStatus.cancelled)
                 .map(trip -> TripMapper.toDTO(trip, getAverageRating(trip.getId()), bookingRepository))
                 .collect(Collectors.toList());
     }

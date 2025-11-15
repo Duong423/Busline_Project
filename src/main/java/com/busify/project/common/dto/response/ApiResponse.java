@@ -87,6 +87,20 @@ public class ApiResponse<T> {
     }
 
     /**
+     * Creates a forbidden error response
+     * 
+     * @param message Error message
+     * @return ApiResponse with 403 status
+     */
+    public static <T> ApiResponse<T> forbidden(String message) {
+        return ApiResponse.<T>builder()
+                .code(403)
+                .message(message)
+                .result(null)
+                .build();
+    }
+
+    /**
      * Creates an internal server error response
      * 
      * @param message Error message

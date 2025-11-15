@@ -24,6 +24,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                 JOIN t.bus b
                 WHERE b.operator.id = :operatorId
                   AND t.departureTime > :now
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
                 ORDER BY t.departureTime ASC
                 LIMIT 1
             """)
@@ -221,6 +222,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                   AND (:startLocation IS NULL OR t.route.startLocation.id = :startLocation)
                   AND (:endLocation IS NULL OR t.route.endLocation.id = :endLocation)
                   AND (:status IS NULL OR t.status = :status)
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
                   AND (:availableSeats IS NULL OR (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.id.tripId = t.id AND ts.status = 'available') >= :availableSeats)
             """)
     Page<Trip> filterTrips(
@@ -241,6 +243,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                   AND (:startLocation IS NULL OR t.route.startLocation.id = :startLocation)
                   AND (:endLocation IS NULL OR t.route.endLocation.id = :endLocation)
                   AND (:status IS NULL OR t.status = :status)
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
                   AND (:availableSeats IS NULL OR (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.id.tripId = t.id AND ts.status = 'available') >= :availableSeats)
                 ORDER BY t.departureTime ASC
             """)
@@ -257,6 +260,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                 SELECT t FROM Trip t
                 JOIN t.bus b
                 WHERE (:status IS NULL OR t.status = :status)
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
                   AND (:keyword IS NULL OR :keyword = ''
                        OR LOWER(t.route.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                        OR LOWER(t.bus.licensePlate) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -362,6 +366,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             JOIN bus_operators AS bo ON b.operator_id = bo.operator_id
             WHERE
                 t.driver_id = :driverId
+                AND t.status <> 'CANCELLED'
             ORDER BY
                 t.departure_time DESC
             """, nativeQuery = true)
@@ -412,6 +417,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             SELECT t FROM Trip t
             WHERE t.driver.id = :driverId
               AND t.departureTime > :currentTime
+              AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
             ORDER BY t.departureTime ASC
             """)
     List<Trip> findUpcomingTripsByDriverId(@Param("driverId") Long driverId, @Param("currentTime") Instant currentTime);
@@ -497,4 +503,16 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             WHERE t.id = :tripId
             """)
     NextTripSeatStatusDTO getNextTripSeatStatus(@Param("tripId") Long tripId);
+
+    /**
+     * Tìm các chuyến đi đã quá thời gian khởi hành và cần hủy
+     */
+    @Query("""
+            SELECT t FROM Trip t
+            WHERE t.departureTime < :currentTime
+              AND t.status IN (com.busify.project.trip.enums.TripStatus.on_sell, 
+                               com.busify.project.trip.enums.TripStatus.scheduled)
+            ORDER BY t.departureTime DESC
+            """)
+    List<Trip> findExpiredTrips(@Param("currentTime") Instant currentTime);
 }

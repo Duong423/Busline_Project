@@ -128,6 +128,10 @@ public class TripController {
     public ApiResponse<Map<String, Object>> getTripById(@PathVariable Long id) {
         try {
             return ApiResponse.success("Lấy thông tin chuyến đi thành công", tripService.getTripDetailById(id));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.badRequest(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ApiResponse.forbidden(e.getMessage());
         } catch (Exception e) {
             return ApiResponse.internalServerError("Đã xảy ra lỗi khi lấy thông tin chuyến đi: " + e.getMessage());
         }
