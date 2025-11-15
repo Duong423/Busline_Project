@@ -284,7 +284,8 @@ public class TicketServiceImpl implements TicketService {
                 // kiểm tra chủ vé
             } else {
                 // Nếu không phải các quyền trên, kiểm tra xem có phải là chủ vé không
-                if (!ticket.getBooking().getCustomer().getEmail().equals(email)) {
+                if (ticket.getBooking().getCustomer() == null 
+                        || !ticket.getBooking().getCustomer().getEmail().equals(email)) {
                     throw new SecurityException("Bạn không có quyền xóa vé này");
                 }
             }
@@ -321,7 +322,7 @@ public class TicketServiceImpl implements TicketService {
             // Before changing ticket status to cancelled
             String fullName = ticket.getPassengerName();
             String toEmail = ticket.getBooking().getGuestEmail() != null ? ticket.getBooking().getGuestEmail()
-                    : ticket.getBooking().getCustomer().getEmail();
+                    : (ticket.getBooking().getCustomer() != null ? ticket.getBooking().getCustomer().getEmail() : "");
 
             emailService.sendTicketCancelledEmail(toEmail, fullName, ticket);
 

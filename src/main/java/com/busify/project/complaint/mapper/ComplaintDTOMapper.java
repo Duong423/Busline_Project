@@ -34,9 +34,11 @@ public class ComplaintDTOMapper {
         // Safely handle customer casting
         if (complaint.getCustomer() instanceof Profile customerProfile) {
             response.setCustomerName(customerProfile.getFullName());
-        } else {
+        } else if (complaint.getCustomer() != null) {
             // Fallback to email if not a Profile
             response.setCustomerName(complaint.getCustomer().getEmail());
+        } else {
+            response.setCustomerName("Unknown");
         }
         return response;
     }
@@ -77,9 +79,11 @@ public class ComplaintDTOMapper {
         // Safely handle customer casting
         if (complaint.getCustomer() instanceof Profile customerProfile) {
             response.setCustomerName(customerProfile.getFullName());
-        } else {
+        } else if (complaint.getCustomer() != null) {
             // Fallback to email if not a Profile
             response.setCustomerName(complaint.getCustomer().getEmail());
+        } else {
+            response.setCustomerName("Unknown");
         }
         return response;
     }
@@ -101,12 +105,17 @@ public class ComplaintDTOMapper {
             customerInfo.setCustomerEmail(customerProfile.getEmail());
             customerInfo.setCustomerPhone(customerProfile.getPhoneNumber());
             customerInfo.setCustomerAddress(customerProfile.getAddress());
-        } else {
+        } else if (complaint.getCustomer() != null) {
             // Fallback to basic User fields if not a Profile
             customerInfo.setCustomerName(complaint.getCustomer().getEmail()); // Use email as name
             customerInfo.setCustomerEmail(complaint.getCustomer().getEmail());
             customerInfo.setCustomerPhone(null); // Or set a default
             customerInfo.setCustomerAddress(null); // Or set a default
+        } else {
+            customerInfo.setCustomerName("Unknown");
+            customerInfo.setCustomerEmail("unknown@example.com");
+            customerInfo.setCustomerPhone(null);
+            customerInfo.setCustomerAddress(null);
         }
         response.setCustomer(customerInfo);
 

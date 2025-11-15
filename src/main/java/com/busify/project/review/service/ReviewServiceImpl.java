@@ -228,12 +228,16 @@ public class ReviewServiceImpl extends ReviewService {
                 
                 // Check if user has a completed booking for this trip
                 final boolean hasCompletedBooking = trip.getBookings().stream()
-                        .anyMatch(booking -> booking.getCustomer().getEmail().equals(email) 
+                        .anyMatch(booking -> booking.getCustomer() != null 
+                                && booking.getCustomer().getEmail() != null
+                                && booking.getCustomer().getEmail().equals(email) 
                                 && booking.getStatus().toString().equalsIgnoreCase("completed"));
                 
                 if (!hasCompletedBooking) {
                         final boolean hasBooking = trip.getBookings().stream()
-                                .anyMatch(booking -> booking.getCustomer().getEmail().equals(email));
+                                .anyMatch(booking -> booking.getCustomer() != null 
+                                        && booking.getCustomer().getEmail() != null
+                                        && booking.getCustomer().getEmail().equals(email));
                         
                         if (!hasBooking) {
                                 return "You must have a booking for this trip to leave a review";
@@ -244,7 +248,9 @@ public class ReviewServiceImpl extends ReviewService {
                 
                 // Check if user already reviewed this trip
                 final boolean hasReviewed = reviewRepository.findByTripId(tripId).stream()
-                        .anyMatch(review -> review.getCustomer().getEmail().equals(email));
+                        .anyMatch(review -> review.getCustomer() != null 
+                                && review.getCustomer().getEmail() != null
+                                && review.getCustomer().getEmail().equals(email));
                 
                 if (hasReviewed) {
                         return "You have already reviewed this trip";

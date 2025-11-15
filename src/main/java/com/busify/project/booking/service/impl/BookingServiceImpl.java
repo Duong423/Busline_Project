@@ -340,7 +340,7 @@ public class BookingServiceImpl implements BookingService {
                 // kiểm tra chủ vé
             } else {
                 // Nếu không phải các quyền trên, kiểm tra xem có phải là chủ vé không
-                if (!booking.getCustomer().getEmail().equals(email)) {
+                if (booking.getCustomer() == null || !booking.getCustomer().getEmail().equals(email)) {
                     throw new BookingUnauthorizedException("You are not authorized to update this booking");
                 }
             }
@@ -355,9 +355,9 @@ public class BookingServiceImpl implements BookingService {
 
             // Send email notification
             String fullName = booking.getGuestFullName() != null ? booking.getGuestFullName()
-                    : booking.getCustomer().getEmail();
+                    : (booking.getCustomer() != null ? booking.getCustomer().getEmail() : "Guest");
             String toEmail = booking.getGuestEmail() != null ? booking.getGuestEmail()
-                    : booking.getCustomer().getEmail();
+                    : (booking.getCustomer() != null ? booking.getCustomer().getEmail() : "");
 
             emailService.sendBookingUpdatedEmail(toEmail, fullName, booking.getTickets());
 
@@ -499,7 +499,7 @@ public class BookingServiceImpl implements BookingService {
             // kiểm tra chủ vé
         } else {
             // Nếu không phải các quyền trên, kiểm tra xem có phải là chủ vé không
-            if (!booking.getCustomer().getEmail().equals(email)) {
+            if (booking.getCustomer() == null || !booking.getCustomer().getEmail().equals(email)) {
                 throw new BookingUnauthorizedException("You are not authorized to cancel this booking");
             }
         }
@@ -539,16 +539,16 @@ public class BookingServiceImpl implements BookingService {
 
             // Before setting booking status to cancelled
             String fullName = booking.getGuestFullName() != null ? booking.getGuestFullName()
-                    : booking.getCustomer().getEmail();
+                    : (booking.getCustomer() != null ? booking.getCustomer().getEmail() : "Guest");
             String toEmail = booking.getGuestEmail() != null ? booking.getGuestEmail()
-                    : booking.getCustomer().getEmail();
+                    : (booking.getCustomer() != null ? booking.getCustomer().getEmail() : "");
 
             emailService.sendBookingCancelledEmail(toEmail, fullName, booking.getTickets());
 
             booking.setStatus(BookingStatus.canceled_by_operator);
         } else {
             // Nếu không phải các quyền trên, kiểm tra xem có phải là chủ vé không
-            if (!booking.getCustomer().getEmail().equals(email)) {
+            if (booking.getCustomer() == null || !booking.getCustomer().getEmail().equals(email)) {
                 throw new BookingUnauthorizedException("You are not authorized to cancel this booking");
             }
             booking.setStatus(BookingStatus.canceled_by_user);

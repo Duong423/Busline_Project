@@ -56,8 +56,9 @@ public class BookingMapper {
         bookings.setTrip(trip);
         if (customer != null) {
             bookings.setCustomer(customer);
+            System.out.println("Customer set successfully: " + customer.getEmail());
         } else {
-            System.out.println("Setting guest info because customer is null");
+            System.out.println("WARNING: Setting guest info because customer is null for booking");
         }
 
         // Always set guest info regardless of customer
