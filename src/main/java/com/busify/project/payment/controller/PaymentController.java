@@ -4,8 +4,11 @@ import com.busify.project.common.dto.response.ApiResponse;
 import com.busify.project.payment.dto.request.PaymentRequestDTO;
 import com.busify.project.payment.dto.response.PaymentDetailResponseDTO;
 import com.busify.project.payment.dto.response.PaymentResponseDTO;
+import com.busify.project.payment.entity.Payment;
+import com.busify.project.payment.enums.PaymentStatus;
 import com.busify.project.payment.service.impl.PaymentServiceImpl;
 import com.busify.project.payment.strategy.impl.VNPayPaymentStrategy;
+import com.busify.project.payment.strategy.impl.ZaloPayPaymentStrategy;
 import com.busify.project.ticket.service.TicketService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,9 +21,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
 
+import java.util.HashMap;
 import java.util.Map;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/payments")
@@ -31,6 +33,7 @@ public class PaymentController {
 
     private final PaymentServiceImpl paymentService;
     private final VNPayPaymentStrategy vnPayPaymentStrategy;
+    private final ZaloPayPaymentStrategy zaloPayPaymentStrategy;
     private final TicketService ticketService;
 
     @PostMapping("/create")
@@ -168,6 +171,105 @@ public class PaymentController {
         } catch (Exception e) {
             log.error("Error handling VNPay callback: ", e);
             return ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Error handling VNPay callback");
+        }
+    }
+
+    // ZaloPay callback endpoint
+    @PostMapping("/zalopay/callback")
+    @Operation(summary = "Handle ZaloPay payment callback")
+    public ApiResponse<Map<String, Object>> zaloPayCallback(@RequestBody Map<String, String> callbackData) {
+        try {
+            log.info("ZaloPay callback received: {}", callbackData);
+
+            // Handle callback through strategy
+            PaymentResponseDTO response = zaloPayPaymentStrategy.handleCallback(callbackData);
+
+            // Create tickets if payment successful
+            if (response.getStatus().name().equals("completed")) {
+                Long bookingId = response.getBookingId();
+                ticketService.createTicketsFromBooking(bookingId, null);
+            }
+
+            // Return response to ZaloPay (must return specific format)
+            Map<String, Object> result = new HashMap<>();
+            result.put("return_code", 1); // 1 = success, other = error
+            result.put("return_message", "success");
+
+            return ApiResponse.<Map<String, Object>>builder()
+                    .code(HttpStatus.OK.value())
+                    .message("ZaloPay callback processed successfully")
+                    .result(result)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error handling ZaloPay callback: ", e);
+            
+            // Return error response to ZaloPay
+            Map<String, Object> result = new HashMap<>();
+            result.put("return_code", 0);
+            result.put("return_message", "error: " + e.getMessage());
+            
+            return ApiResponse.<Map<String, Object>>builder()
+                    .code(HttpStatus.BAD_REQUEST.value())
+                    .message("Error handling ZaloPay callback")
+                    .result(result)
+                    .build();
+        }
+    }
+
+    // ZaloPay return endpoint - user redirects here after payment
+    @GetMapping("/zalopay/return")
+    @Operation(summary = "Handle ZaloPay user return after payment")
+    public RedirectView zaloPayReturn(@RequestParam(required = false) String apptransid) {
+        try {
+            log.info("ZaloPay return received with apptransid: {}", apptransid);
+            
+            if (apptransid != null) {
+                // Clean duplicate parameter if exists (e.g., "251201_609643,251201_609643")
+                String cleanAppTransId = apptransid.split(",")[0].trim();
+                log.info("Cleaned app_trans_id: {}", cleanAppTransId);
+                
+                // Query ZaloPay to check payment status and process
+                PaymentResponseDTO response = zaloPayPaymentStrategy.queryAndProcessPayment(cleanAppTransId);
+                
+                // If payment successful, create tickets (same as VNPAY flow)
+                if (response != null && response.getStatus() == PaymentStatus.completed) {
+                    Long bookingId = response.getBookingId();
+                    log.info("Creating tickets for Booking ID: {}", bookingId);
+                    ticketService.createTicketsFromBooking(bookingId, null);
+                    
+                    // Redirect to frontend success page
+                    return new RedirectView("http://localhost:3000/bookingresult/" + response.getPaymentId());
+                }
+            }
+            
+            // Redirect to processing page if status unknown
+            return new RedirectView("http://localhost:3000/payment/success?status=processing");
+        } catch (Exception e) {
+            log.error("Error handling ZaloPay return: ", e);
+            return new RedirectView("http://localhost:3000/payment/failed");
+        }
+    }
+
+    // Get payment by booking ID - for frontend to check status
+    @GetMapping("/booking/{bookingId}")
+    @Operation(summary = "Get payment status by booking ID")
+    public ApiResponse<PaymentResponseDTO> getPaymentByBookingId(@PathVariable Long bookingId) {
+        try {
+            Payment payment = paymentService.getPaymentByBookingId(bookingId);
+            
+            return ApiResponse.<PaymentResponseDTO>builder()
+                    .code(HttpStatus.OK.value())
+                    .message("Payment retrieved successfully")
+                    .result(PaymentResponseDTO.builder()
+                            .paymentId(payment.getPaymentId())
+                            .status(payment.getStatus())
+                            .bookingId(payment.getBooking().getId())
+                            .build())
+                    .build();
+        } catch (Exception e) {
+            log.error("Error getting payment by booking ID: ", e);
+            return ApiResponse.error(HttpStatus.NOT_FOUND.value(), "Payment not found");
         }
     }
 

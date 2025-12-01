@@ -1,6 +1,7 @@
 package com.busify.project.booking.dto.response;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import com.busify.project.booking.enums.BookingStatus;
 
@@ -18,4 +19,5 @@ public class BookingAddResponseDTO {
     private String seatNumber;
     private BigDecimal totalAmount;
     private BookingStatus status;
+    private Instant expiresAt; // Thời điểm hết hạn booking (createdAt + 15 phút)
 }

@@ -338,6 +338,14 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
     }
 
+    public Payment getPaymentByBookingId(Long bookingId) {
+        Payment payment = paymentRepository.findByBookingId(bookingId);
+        if (payment == null) {
+            throw PaymentNotFoundException.notFound();
+        }
+        return payment;
+    }
+
     // Helper method to get current user from SecurityContext
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

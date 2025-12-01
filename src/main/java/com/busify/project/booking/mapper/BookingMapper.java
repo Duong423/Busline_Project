@@ -13,6 +13,7 @@ import com.busify.project.user.entity.Profile;
 import com.busify.project.booking.dto.response.BookingDetailResponse;
 
 import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -93,6 +94,9 @@ public class BookingMapper {
         response.setSeatNumber(bookings.getSeatNumber());
         response.setTotalAmount(bookings.getTotalAmount());
         response.setStatus(bookings.getStatus());
+        
+        // Calculate expiresAt = createdAt + 15 minutes (đồng bộ với backend timeout)
+        response.setExpiresAt(bookings.getCreatedAt().plus(15, ChronoUnit.MINUTES));
 
         return response;
     }

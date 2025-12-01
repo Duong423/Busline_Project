@@ -1,6 +1,8 @@
 package com.busify.project.payment.service.impl;
 
 import com.busify.project.booking.entity.Bookings;
+import com.busify.project.booking.enums.BookingStatus;
+import com.busify.project.booking.repository.BookingRepository;
 import com.busify.project.common.event.PaymentSuccessEvent;
 import com.busify.project.payment.entity.Payment;
 import com.busify.project.promotion.service.PromotionService;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentSuccessHandler {
 
     private final PromotionService promotionService;
+    private final BookingRepository bookingRepository;
 
     @EventListener
     @Transactional
@@ -25,6 +28,11 @@ public class PaymentSuccessHandler {
 
         log.info("Handling payment success for booking ID: {}, payment ID: {}", booking.getId(),
                 payment.getPaymentId());
+
+        // Update booking status to CONFIRMED when payment is successful
+        booking.setStatus(BookingStatus.confirmed);
+        bookingRepository.save(booking);
+        log.info("Updated booking {} status to CONFIRMED after successful payment", booking.getId());
 
         // Mark promotion as used when payment is successful
         // Check both applied discount code (COUPON) and applied promotion ID (AUTO)
