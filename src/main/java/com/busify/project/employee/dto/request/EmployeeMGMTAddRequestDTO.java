@@ -1,6 +1,7 @@
 package com.busify.project.employee.dto.request;
 
 import com.busify.project.employee.enums.EmployeeType;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,6 +22,7 @@ public class EmployeeMGMTAddRequestDTO {
     @Size(min = 8, message = "Password must be at least 6 characters")
     private String password;
 
-    @NotNull(message = "Loại nhân viên không được để trống")
-    private EmployeeType employeeType;
+    // Không bắt buộc - mặc định là STAFF nếu không có
+    @JsonProperty("employeeType")
+    private EmployeeType employeeType = EmployeeType.DRIVER;
 }

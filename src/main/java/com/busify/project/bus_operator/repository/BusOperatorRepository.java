@@ -54,9 +54,10 @@ public interface BusOperatorRepository extends JpaRepository<BusOperator, Long> 
     @Query("SELECT bo FROM BusOperator bo ")
     List<BusOperator> getAllBusOperators();
 
-    @Query(value = """
+    @Query("""
             SELECT bo FROM BusOperator bo
-            WHERE (:keyword IS NULL OR :keyword = ''
+            WHERE bo.isDeleted = false
+              AND (:keyword IS NULL OR :keyword = ''
                    OR LOWER(bo.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(bo.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(bo.hotline) LIKE LOWER(CONCAT('%', :keyword, '%')))

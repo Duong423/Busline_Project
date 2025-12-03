@@ -99,6 +99,9 @@ public class TripMGMTServiceImpl implements TripMGMTService {
         }
         trip.setBus(bus);
 
+        // Log để debug
+        System.out.println("[addTrip] departureTime from DTO: " + requestDTO.getDepartureTime());
+        
         Instant newDeparture = requestDTO.getDepartureTime();
         Instant newArrival = newDeparture.plus(Duration.ofMinutes(route.getDefaultDurationMinutes()));
 

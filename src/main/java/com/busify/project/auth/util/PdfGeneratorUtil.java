@@ -40,8 +40,9 @@ public class PdfGeneratorUtil {
     }
 
     public static byte[] generateTicketPDF(String fullName, List<Tickets> tickets) throws IOException {
+        // Dùng UTC vì dữ liệu Instant đã lưu giờ Việt Nam như UTC
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
-                .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+                .withZone(java.time.ZoneOffset.UTC);
         NumberFormat currencyFormatter = NumberFormat.getInstance(new Locale("vi", "VN"));
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

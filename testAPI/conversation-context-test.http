@@ -1,0 +1,100 @@
+### Test Conversation Context - Smart Chat với khả năng nhớ context
+
+### 1. Tin nhắn đầu tiên - Chỉ nêu điểm đi
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "tìm chuyến đi Nha Trang",
+  "sender": "user@example.com"
+}
+
+### 2. Tin nhắn thứ hai - Chỉ nêu điểm đến (AI sẽ nhớ điểm đi từ tin nhắn trước)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "đến Đà Lạt",
+  "sender": "user@example.com"
+}
+
+### 3. Tin nhắn thứ ba - Bổ sung ngày đi (AI sẽ nhớ cả điểm đi và điểm đến)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "ngày mai",
+  "sender": "user@example.com"
+}
+
+### 4. Tin nhắn thứ tư - Bổ sung số lượng vé
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "2 vé",
+  "sender": "user@example.com"
+}
+
+### 5. Reset context - Bắt đầu hội thoại mới
+POST http://localhost:8080/api/ai-chat/smart/reset-context
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+### 6. Test sau khi reset - Nêu điểm đi mới
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "tìm xe từ Hà Nội",
+  "sender": "user@example.com"
+}
+
+### 7. Nêu điểm đến mới (context đã reset nên bắt đầu từ đầu)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "đi Sapa",
+  "sender": "user@example.com"
+}
+
+###
+### Test case phức tạp hơn
+###
+
+### 8. Hỏi về giá (với context từ tin nhắn trước)
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "giá bao nhiêu?",
+  "sender": "user@example.com"
+}
+
+### 9. Thay đổi loại xe
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "xe VIP",
+  "sender": "user@example.com"
+}
+
+### 10. Hỏi lịch trình
+POST http://localhost:8080/api/ai-chat/smart/send
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "content": "lịch trình như thế nào?",
+  "sender": "user@example.com"
+}

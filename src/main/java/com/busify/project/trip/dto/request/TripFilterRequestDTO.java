@@ -2,6 +2,8 @@ package com.busify.project.trip.dto.request;
 
 import java.time.Instant;
 
+import com.busify.project.common.config.VietnamInstantDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
@@ -9,8 +11,13 @@ import lombok.Data;
 public class TripFilterRequestDTO {
     private Long startLocation;
     private Long endLocation;
+    
+    @JsonDeserialize(using = VietnamInstantDeserializer.class)
     private Instant departureDate;
+    
     private String[] busModels;
+    
+    @JsonDeserialize(using = VietnamInstantDeserializer.class)
     private Instant untilTime;
     @Pattern(regexp = "^[a-zA-Z0-9_/]+$", message = "Time zone must be in the format 'region/city'")
     private String timeZone = "Asia/Ho_Chi_Minh";

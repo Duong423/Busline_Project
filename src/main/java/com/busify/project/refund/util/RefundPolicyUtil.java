@@ -8,12 +8,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 public class RefundPolicyUtil {
 
-    // Timezone mặc định cho hệ thống (có thể config từ application.properties)
-    private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    // Dùng UTC vì dữ liệu Instant đã lưu giờ Việt Nam như UTC
+    private static final ZoneId DEFAULT_ZONE = ZoneOffset.UTC;
 
     /**
      * Convert Instant to LocalDateTime using system timezone

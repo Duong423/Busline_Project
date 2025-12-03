@@ -260,6 +260,27 @@ public class BusOperatorServiceImpl implements BusOperatorService {
             }
         }
 
+        // Update basic fields if provided
+        if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            busOperator.setName(request.getName());
+        }
+
+        if (request.getHotline() != null && !request.getHotline().trim().isEmpty()) {
+            busOperator.setHotline(request.getHotline());
+        }
+
+        if (request.getAddress() != null && !request.getAddress().trim().isEmpty()) {
+            busOperator.setAddress(request.getAddress());
+        }
+
+        if (request.getDescription() != null && !request.getDescription().trim().isEmpty()) {
+            busOperator.setDescription(request.getDescription());
+        }
+
+        if (request.getStatus() != null) {
+            busOperator.setStatus(request.getStatus());
+        }
+
         if (request.getEmail() != null) {
             Profile newOwner = (Profile) userRepository.findByEmail(request.getEmail())
                     .orElseThrow(() -> BusOperatorUpdateException
@@ -309,6 +330,7 @@ public class BusOperatorServiceImpl implements BusOperatorService {
 
         // Soft delete - set isDeleted flag and inactive status
         busOperator.setDeleted(true);
+        busOperator.setStatus(OperatorStatus.inactive);
 
         // Audit log for bus operator deletion (before save)
         User currentUser = getCurrentUser();

@@ -39,6 +39,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.NumberFormat;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
@@ -209,8 +210,9 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private byte[] generateTicketPDF(String fullName, List<Tickets> tickets) throws IOException {
+        // Dùng UTC vì dữ liệu Instant đã lưu giờ Việt Nam như UTC
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
-                .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+                .withZone(ZoneOffset.UTC);
         NumberFormat currencyFormatter = NumberFormat.getInstance(new Locale("vi", "VN"));
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -357,8 +359,9 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private String buildTicketEmailContent(String fullName, List<Tickets> tickets) {
+        // Dùng UTC vì dữ liệu Instant đã lưu giờ Việt Nam như UTC
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
-                .withZone(ZoneId.of("Asia/Ho_Chi_Minh"));
+                .withZone(ZoneOffset.UTC);
         NumberFormat currencyFormatter = NumberFormat.getInstance(new Locale("vi", "VN"));
 
         StringBuilder ticketCards = new StringBuilder();

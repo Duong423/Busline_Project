@@ -19,6 +19,7 @@ import com.busify.project.chat.dto.ChatMessageDTO;
 import com.busify.project.chat.model.ChatMessage;
 import com.busify.project.chat.service.ChatBotService;
 import com.busify.project.chat.service.ChatService;
+import com.busify.project.chat.service.ConversationContextService;
 import com.busify.project.chat.service.OpenAIService;
 import com.busify.project.chat.service.SmartChatBotService;
 import com.busify.project.common.dto.response.ApiResponse;
@@ -39,6 +40,7 @@ public class ChatAIController {
     private final JwtUtils jwtUtils;
     private final OpenAIService openAIService;
     private final SmartChatBotService smartChatBotService;
+    private final ConversationContextService conversationContextService;
 
     /**
      * Xử lý tin nhắn chat với AI qua WebSocket.
@@ -307,6 +309,26 @@ public class ChatAIController {
                 .build();
             
             messagingTemplate.convertAndSend("/topic/smart/" + userId, errorResponse);
+        }
+    }
+
+    /**
+     * Reset conversation context - Bắt đầu hội thoại mới
+     */
+    @PostMapping("/smart/reset-context")
+    public ApiResponse<String> resetConversationContext() {
+        try {
+            String currentUser = jwtUtils.getCurrentUserLogin().orElse("anonymous");
+            
+            log.info("Resetting conversation context for user: {}", currentUser);
+            conversationContextService.clearContext(currentUser);
+            
+            return ApiResponse.success("Đã reset hội thoại. Bạn có thể bắt đầu cuộc trò chuyện mới!", 
+                "Context cleared successfully");
+
+        } catch (Exception e) {
+            log.error("Error resetting conversation context", e);
+            return ApiResponse.internalServerError("Lỗi khi reset hội thoại: " + e.getMessage());
         }
     }
 }

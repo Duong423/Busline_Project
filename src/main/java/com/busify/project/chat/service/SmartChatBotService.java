@@ -23,6 +23,7 @@ public class SmartChatBotService {
     private final IntentExtractionService intentExtractionService;
     private final TripSearchService tripSearchService;
     private final OpenAIService openAIService;
+    private final ConversationContextService conversationContextService;
 
     /**
      * Xử lý tin nhắn thông minh - trích xuất ý định và tìm kiếm sản phẩm
@@ -32,10 +33,18 @@ public class SmartChatBotService {
             log.info("Processing smart message from user: {}", userEmail);
 
             // 1. Trích xuất ý định từ tin nhắn
-            SearchIntentDTO intent = intentExtractionService.extractSearchIntent(userMessage);
-            log.info("Extracted intent: {}", intent.getIntentType());
+            SearchIntentDTO rawIntent = intentExtractionService.extractSearchIntent(userMessage);
+            log.info("Extracted raw intent: {}", rawIntent.getIntentType());
 
-            // 2. Xử lý theo loại ý định
+            // 2. Merge với context từ các tin nhắn trước
+            SearchIntentDTO intent = conversationContextService.mergeContextWithIntent(userEmail, rawIntent);
+            log.info("Merged intent with context - Departure: {}, Destination: {}", 
+                intent.getDeparture(), intent.getDestination());
+
+            // 3. Cập nhật context với thông tin mới
+            conversationContextService.updateContext(userEmail, intent, userMessage);
+
+            // 4. Xử lý theo loại ý định
             AIResponseDTO response = switch (intent.getIntentType()) {
                 case "SEARCH_TRIP" -> handleSearchTrip(intent, userMessage, userEmail);
                 case "ASK_PRICE" -> handleAskPrice(intent, userMessage, userEmail);

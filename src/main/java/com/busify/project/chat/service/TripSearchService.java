@@ -15,6 +15,7 @@ import com.busify.project.chat.dto.TripSearchResultDTO;
 import com.busify.project.location.entity.Location;
 import com.busify.project.location.repository.LocationRepository;
 import com.busify.project.trip.dto.response.TripFilterResponseDTO;
+import com.busify.project.trip.enums.TripStatus;
 import com.busify.project.trip.service.impl.TripServiceImpl;
 
 import lombok.RequiredArgsConstructor;
@@ -152,6 +153,24 @@ public class TripSearchService {
                         firstTrip.getStatus());
                 }
             }
+            
+            // ✅ Lọc bỏ các chuyến có status ARRIVED hoặc CANCELLED
+            trips = trips.stream()
+                .filter(trip -> {
+                    TripStatus status = trip.getStatus();
+                    boolean isValidStatus = status != null && 
+                        status != TripStatus.arrived && 
+                        status != TripStatus.cancelled;
+                    
+                    if (!isValidStatus) {
+                        log.info("⚠️ Filtered out trip {} with status: {}", trip.getTrip_id(), status);
+                    }
+                    
+                    return isValidStatus;
+                })
+                .collect(Collectors.toList());
+            
+            log.info("✅ After filtering arrived/cancelled trips: {} trips remaining", trips.size());
             
             // Convert sang TripSearchResultDTO
             return trips.stream()
