@@ -2,8 +2,10 @@ package com.busify.project.trip.service;
 
 import com.busify.project.trip.dto.response.FilterResponseDTO;
 import com.busify.project.trip.dto.response.NextTripSeatsStatusResponseDTO;
+import com.busify.project.trip.dto.response.RoundTripFilterResponseDTO;
 import com.busify.project.trip.dto.response.TopTripRevenueDTO;
 import com.busify.project.trip.dto.response.TripFilterResponseDTO;
+import com.busify.project.trip.dto.request.RoundTripFilterRequestDTO;
 import com.busify.project.trip.dto.request.TripFilterRequestDTO;
 import com.busify.project.trip.dto.request.TripUpdateStatusRequest;
 import com.busify.project.trip.dto.response.TripByDriverResponseDTO;
@@ -47,4 +49,7 @@ public interface TripService {
     List<TripFilterResponseDTO> getTripRouteByIdExcludingTrip(Long tripId);
 
     NextTripSeatsStatusResponseDTO getNextTripSeatsStatus(Long tripId);
+
+    // Tìm kiếm chuyến đi khứ hồi
+    RoundTripFilterResponseDTO filterRoundTrips(RoundTripFilterRequestDTO filter, int page, int size);
 }

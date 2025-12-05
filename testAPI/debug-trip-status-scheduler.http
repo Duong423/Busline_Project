@@ -1,0 +1,35 @@
+### Debug Trip Status Scheduler
+### Kiểm tra trip 71 và logic auto-cancel
+
+### 1. Kiểm tra thông tin trip 71
+GET http://localhost:8080/api/trips/71
+
+###
+
+### 2. Kiểm tra tất cả trips có status on_sell hoặc scheduled
+### (Chạy SQL trực tiếp trong DB)
+# SELECT t.trip_id, t.departure_time, t.status 
+# FROM trips t 
+# WHERE t.status IN ('on_sell', 'scheduled') 
+# AND t.departure_time < NOW()
+# ORDER BY t.departure_time DESC;
+
+###
+
+### 3. Kiểm tra trip 71 cụ thể
+# SELECT trip_id, departure_time, status, 
+#        TIMESTAMPDIFF(MINUTE, departure_time, NOW()) as minutes_past
+# FROM trips 
+# WHERE trip_id = 71;
+
+###
+
+### NOTE: 
+### - Scheduler chạy mỗi 5 phút
+### - Query tìm trips có status = on_sell hoặc scheduled VÀ departure_time < NOW()
+### - Trip 71 có departure_time = 2025-12-05 19:00:00
+### 
+### Kiểm tra:
+### 1. Status của trip 71 có phải là 'on_sell' hoặc 'scheduled' không?
+### 2. Nếu status đã là 'departed', 'arrived', hoặc 'cancelled' thì sẽ không bị cancel tự động
+### 3. Kiểm tra log server để xem scheduler có chạy không

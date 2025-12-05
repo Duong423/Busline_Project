@@ -17,6 +17,7 @@ import com.busify.project.trip.entity.Trip;
 import com.busify.project.route.dto.response.RouteResponse;
 import com.busify.project.seat_layout.entity.SeatLayout;
 import com.busify.project.seat_layout.repository.SeatLayoutRepository;
+import com.busify.project.trip.dto.request.RoundTripFilterRequestDTO;
 import com.busify.project.trip.dto.request.TripFilterRequestDTO;
 import com.busify.project.trip.dto.request.TripUpdateStatusRequest;
 import com.busify.project.trip.enums.TripStatus;
@@ -157,9 +158,19 @@ public class TripServiceImpl implements TripService {
 
         Pageable pageable = PageRequest.of(page, size, sort);
 
+        // Tính untilTime để lọc đúng trong ngày (từ 00:00:00 đến 23:59:59 của ngày đó)
+        // Nếu departureDate được truyền và untilTime không được truyền,
+        // thì tự động set untilTime = departureDate + 1 ngày để chỉ lấy trip trong ngày
+        Instant effectiveUntilTime = filter.getUntilTime();
+        if (filter.getDepartureDate() != null && effectiveUntilTime == null) {
+            // Cộng thêm 1 ngày vào departureDate để lấy cuối ngày
+            effectiveUntilTime = filter.getDepartureDate().plus(java.time.Duration.ofDays(1));
+            logger.info("Auto-calculated untilTime for same-day filtering: " + effectiveUntilTime);
+        }
+
         Page<Trip> tripPage = tripRepository.filterTrips(
                 filter.getOperatorName(),
-                filter.getUntilTime(),
+                effectiveUntilTime,
                 filter.getDepartureDate(),
                 filter.getStartLocation(),
                 filter.getEndLocation(),
@@ -601,5 +612,90 @@ public class TripServiceImpl implements TripService {
         responseDTO.setTripId(tripId);
         responseDTO.setSeatStatuses(seatStatuses);
         return responseDTO;
+    }
+
+    @Override
+    public RoundTripFilterResponseDTO filterRoundTrips(RoundTripFilterRequestDTO filter, int page, int size) {
+        Logger logger = Logger.getLogger(TripServiceImpl.class.getName());
+        logger.info("Round trip filter: " + filter.toString());
+
+        // Chuyển đổi RoundTripFilterRequestDTO sang TripFilterRequestDTO cho chiều đi
+        TripFilterRequestDTO outboundFilter = convertToTripFilterRequest(filter);
+        
+        // Lọc chuyến đi (chiều đi)
+        FilterResponseDTO outboundTrips = filterTrips(outboundFilter, page, size);
+
+        // Nếu không phải khứ hồi, trả về kết quả chiều đi
+        if (filter.getIsRoundTrip() == null || !filter.getIsRoundTrip()) {
+            return RoundTripFilterResponseDTO.builder()
+                    .outboundTrips(outboundTrips)
+                    .returnTrips(null)
+                    .isRoundTrip(false)
+                    .returnTripMessage(null)
+                    .build();
+        }
+
+        // Kiểm tra ngày về phải hợp lệ
+        if (filter.getReturnDate() == null) {
+            return RoundTripFilterResponseDTO.builder()
+                    .outboundTrips(outboundTrips)
+                    .returnTrips(null)
+                    .isRoundTrip(true)
+                    .returnTripMessage("Vui lòng chọn ngày về để tìm kiếm chuyến khứ hồi")
+                    .build();
+        }
+
+        // Kiểm tra ngày về phải sau ngày đi
+        if (filter.getDepartureDate() != null && filter.getReturnDate().isBefore(filter.getDepartureDate())) {
+            return RoundTripFilterResponseDTO.builder()
+                    .outboundTrips(outboundTrips)
+                    .returnTrips(null)
+                    .isRoundTrip(true)
+                    .returnTripMessage("Ngày về phải sau ngày đi")
+                    .build();
+        }
+
+        // Tạo filter cho chiều về (đảo ngược điểm đi/điểm đến)
+        TripFilterRequestDTO returnFilter = convertToTripFilterRequest(filter);
+        returnFilter.setStartLocation(filter.getEndLocation()); // Đảo ngược: điểm đến -> điểm đi
+        returnFilter.setEndLocation(filter.getStartLocation()); // Đảo ngược: điểm đi -> điểm đến
+        returnFilter.setDepartureDate(filter.getReturnDate());  // Ngày về
+
+        // Lọc chuyến về (chiều về)
+        FilterResponseDTO returnTrips = filterTrips(returnFilter, page, size);
+
+        // Kiểm tra có chuyến về không
+        String returnMessage = null;
+        if (returnTrips.getData() == null || returnTrips.getData().isEmpty()) {
+            returnMessage = "Không tìm thấy chuyến khứ hồi phù hợp cho ngày về đã chọn";
+        }
+
+        return RoundTripFilterResponseDTO.builder()
+                .outboundTrips(outboundTrips)
+                .returnTrips(returnTrips)
+                .isRoundTrip(true)
+                .returnTripMessage(returnMessage)
+                .build();
+    }
+
+    /**
+     * Chuyển đổi RoundTripFilterRequestDTO sang TripFilterRequestDTO
+     */
+    private TripFilterRequestDTO convertToTripFilterRequest(RoundTripFilterRequestDTO roundTripFilter) {
+        TripFilterRequestDTO filter = new TripFilterRequestDTO();
+        filter.setStartLocation(roundTripFilter.getStartLocation());
+        filter.setEndLocation(roundTripFilter.getEndLocation());
+        filter.setDepartureDate(roundTripFilter.getDepartureDate());
+        filter.setBusModels(roundTripFilter.getBusModels());
+        filter.setUntilTime(roundTripFilter.getUntilTime());
+        filter.setTimeZone(roundTripFilter.getTimeZone());
+        filter.setOperatorName(roundTripFilter.getOperatorName());
+        filter.setAmenities(roundTripFilter.getAmenities());
+        filter.setAvailableSeats(roundTripFilter.getAvailableSeats());
+        filter.setSortBy(roundTripFilter.getSortBy());
+        filter.setSortDirection(roundTripFilter.getSortDirection());
+        filter.setSortBySecondary(roundTripFilter.getSortBySecondary());
+        filter.setSortDirectionSecondary(roundTripFilter.getSortDirectionSecondary());
+        return filter;
     }
 }

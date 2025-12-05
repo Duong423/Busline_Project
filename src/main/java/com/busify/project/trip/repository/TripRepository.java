@@ -217,8 +217,8 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                 JOIN FETCH t.bus b
                 WHERE (:operatorName IS NULL OR
                   LOWER(t.bus.operator.name) LIKE LOWER(CONCAT('%', :operatorName, '%')))
-                  AND (:untilTime IS NULL OR t.estimatedArrivalTime < :untilTime)
                   AND (:departureDate IS NULL OR t.departureTime >= :departureDate)
+                  AND (:untilTime IS NULL OR t.departureTime < :untilTime)
                   AND (:startLocation IS NULL OR t.route.startLocation.id = :startLocation)
                   AND (:endLocation IS NULL OR t.route.endLocation.id = :endLocation)
                   AND (:status IS NULL OR t.status = :status)
@@ -515,4 +515,9 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             ORDER BY t.departureTime DESC
             """)
     List<Trip> findExpiredTrips(@Param("currentTime") Instant currentTime);
+    
+    /**
+     * Tìm các chuyến đi theo danh sách status (dùng cho debug)
+     */
+    List<Trip> findByStatusIn(List<TripStatus> statuses);
 }

@@ -2,8 +2,10 @@ package com.busify.project.trip.controller;
 
 import com.busify.project.trip.dto.response.FilterResponseDTO;
 import com.busify.project.trip.dto.response.NextTripSeatsStatusResponseDTO;
+import com.busify.project.trip.dto.response.RoundTripFilterResponseDTO;
 import com.busify.project.trip.dto.response.TopTripRevenueDTO;
 import com.busify.project.trip.dto.response.TripFilterResponseDTO;
+import com.busify.project.trip.dto.request.RoundTripFilterRequestDTO;
 import com.busify.project.trip.dto.request.TripFilterRequestDTO;
 import com.busify.project.trip.dto.request.TripSearchRequestDTO;
 import com.busify.project.trip.dto.request.TripUpdateStatusRequest;
@@ -89,6 +91,28 @@ public class TripController {
             }
             FilterResponseDTO filteredTrips = tripService.filterTrips(filter, page, size);
             return ApiResponse.success("Lọc chuyến đi thành công", filteredTrips);
+        } catch (Exception e) {
+            return ApiResponse.internalServerError("Đã xảy ra lỗi khi lọc chuyến đi: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/filter/round-trip")
+    @Operation(summary = "Filter trips with round trip option (khứ hồi)")
+    public ApiResponse<RoundTripFilterResponseDTO> filterRoundTrips(
+            @RequestBody(required = false) RoundTripFilterRequestDTO filter,
+            @RequestParam(defaultValue = "0") int page, 
+            @RequestParam(defaultValue = "20") int size) {
+        try {
+            if (filter == null) {
+                filter = new RoundTripFilterRequestDTO();
+            }
+            RoundTripFilterResponseDTO result = tripService.filterRoundTrips(filter, page, size);
+            
+            if (Boolean.TRUE.equals(filter.getIsRoundTrip()) && result.getReturnTripMessage() != null) {
+                return ApiResponse.success(result.getReturnTripMessage(), result);
+            }
+            
+            return ApiResponse.success("Lọc chuyến đi thành công", result);
         } catch (Exception e) {
             return ApiResponse.internalServerError("Đã xảy ra lỗi khi lọc chuyến đi: " + e.getMessage());
         }
