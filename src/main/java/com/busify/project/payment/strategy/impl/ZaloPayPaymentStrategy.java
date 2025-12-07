@@ -28,6 +28,8 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map;
 
 @Component
@@ -228,6 +230,9 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             Payment payment = paymentRepository.findByPaymentGatewayId(appTransId)
                 .orElseThrow(() -> PaymentNotFoundException.notFound());
             
+            // Lấy danh sách booking IDs (hỗ trợ round-trip)
+            List<Long> allBookingIds = payment.getBookingIdList();
+            
             // Update payment status based on callback status
             if ("1".equals(status)) {
                 // Payment successful
@@ -235,8 +240,15 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
                 payment.setPaidAt(Instant.now());
                 paymentRepository.save(payment);
                 
-                // Cancel seat release job
-                seatReleaseService.cancelReleaseTask(payment.getBooking().getId());
+                // Cancel seat release job cho TẤT CẢ booking
+                if (allBookingIds != null && !allBookingIds.isEmpty()) {
+                    for (Long bookingId : allBookingIds) {
+                        seatReleaseService.cancelReleaseTask(bookingId);
+                        log.info("Cancelled seat release for booking: {}", bookingId);
+                    }
+                } else if (payment.getBooking() != null) {
+                    seatReleaseService.cancelReleaseTask(payment.getBooking().getId());
+                }
                 
                 // Publish payment success event
                 eventPublisher.publishEvent(new PaymentSuccessEvent(
@@ -251,7 +263,8 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
                 return PaymentResponseDTO.builder()
                     .paymentId(payment.getPaymentId())
                     .status(PaymentStatus.completed)
-                    .bookingId(payment.getBooking().getId())
+                    .bookingId(payment.getBooking() != null ? payment.getBooking().getId() : null)
+                    .bookingIds(allBookingIds)
                     .build();
             } else {
                 // Payment failed
@@ -263,7 +276,8 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
                 return PaymentResponseDTO.builder()
                     .paymentId(payment.getPaymentId())
                     .status(PaymentStatus.failed)
-                    .bookingId(payment.getBooking().getId())
+                    .bookingId(payment.getBooking() != null ? payment.getBooking().getId() : null)
+                    .bookingIds(allBookingIds)
                     .build();
             }
             
@@ -324,7 +338,7 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
 
     /**
      * Process payment success - update status, publish event, return response
-     * Returns PaymentResponseDTO with bookingId for ticket creation
+     * Returns PaymentResponseDTO with bookingId and bookingIds for ticket creation
      */
     private PaymentResponseDTO processPaymentSuccess(String appTransId) {
         try {
@@ -337,8 +351,16 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             payment.setPaidAt(Instant.now());
             paymentRepository.save(payment);
             
-            // Cancel seat release job
-            seatReleaseService.cancelReleaseTask(payment.getBooking().getId());
+            // Cancel seat release job cho TẤT CẢ booking (hỗ trợ round-trip)
+            List<Long> allBookingIds = payment.getBookingIdList();
+            if (allBookingIds != null && !allBookingIds.isEmpty()) {
+                for (Long bookingId : allBookingIds) {
+                    seatReleaseService.cancelReleaseTask(bookingId);
+                    log.info("Cancelled seat release for booking: {}", bookingId);
+                }
+            } else if (payment.getBooking() != null) {
+                seatReleaseService.cancelReleaseTask(payment.getBooking().getId());
+            }
             
             // Publish payment success event
             eventPublisher.publishEvent(new PaymentSuccessEvent(
@@ -349,11 +371,12 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             
             log.info("ZaloPay payment processed successfully for payment ID: {}", payment.getPaymentId());
             
-            // Return response with booking ID (same as VNPAY)
+            // Return response with booking ID và bookingIds cho round-trip
             return PaymentResponseDTO.builder()
                 .paymentId(payment.getPaymentId())
                 .status(PaymentStatus.completed)
-                .bookingId(payment.getBooking().getId())
+                .bookingId(payment.getBooking() != null ? payment.getBooking().getId() : null)
+                .bookingIds(allBookingIds)
                 .build();
             
         } catch (Exception e) {

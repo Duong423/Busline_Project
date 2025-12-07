@@ -25,6 +25,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                 WHERE b.operator.id = :operatorId
                   AND t.departureTime > :now
                   AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.arrived
                 ORDER BY t.departureTime ASC
                 LIMIT 1
             """)
@@ -223,6 +224,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                   AND (:endLocation IS NULL OR t.route.endLocation.id = :endLocation)
                   AND (:status IS NULL OR t.status = :status)
                   AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.arrived
                   AND (:availableSeats IS NULL OR (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.id.tripId = t.id AND ts.status = 'available') >= :availableSeats)
             """)
     Page<Trip> filterTrips(
@@ -244,6 +246,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                   AND (:endLocation IS NULL OR t.route.endLocation.id = :endLocation)
                   AND (:status IS NULL OR t.status = :status)
                   AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.arrived
                   AND (:availableSeats IS NULL OR (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.id.tripId = t.id AND ts.status = 'available') >= :availableSeats)
                 ORDER BY t.departureTime ASC
             """)
@@ -261,6 +264,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
                 JOIN t.bus b
                 WHERE (:status IS NULL OR t.status = :status)
                   AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
+                  AND t.status <> com.busify.project.trip.enums.TripStatus.arrived
                   AND (:keyword IS NULL OR :keyword = ''
                        OR LOWER(t.route.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                        OR LOWER(t.bus.licensePlate) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -418,6 +422,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             WHERE t.driver.id = :driverId
               AND t.departureTime > :currentTime
               AND t.status <> com.busify.project.trip.enums.TripStatus.cancelled
+              AND t.status <> com.busify.project.trip.enums.TripStatus.arrived
             ORDER BY t.departureTime ASC
             """)
     List<Trip> findUpcomingTripsByDriverId(@Param("driverId") Long driverId, @Param("currentTime") Instant currentTime);

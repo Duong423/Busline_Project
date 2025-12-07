@@ -292,6 +292,11 @@ public class TripServiceImpl implements TripService {
                 throw new IllegalStateException("Chuyến đi này đã bị hủy và không thể xem chi tiết");
             }
             
+            // Kiểm tra nếu chuyến đi đã đến nơi
+            if (trip.getStatus() == TripStatus.arrived) {
+                throw new IllegalStateException("Chuyến đi này đã hoàn thành và không thể truy cập");
+            }
+            
             // Kiểm tra nếu chuyến đi đã quá thời gian khởi hành nhưng chưa được cập nhật status
             if (trip.getDepartureTime().isBefore(Instant.now()) && 
                 (trip.getStatus() == TripStatus.on_sell || trip.getStatus() == TripStatus.scheduled)) {

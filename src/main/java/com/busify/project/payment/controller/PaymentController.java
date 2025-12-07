@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -82,10 +83,17 @@ public class PaymentController {
 
             PaymentResponseDTO response = paymentService.executePaymentByPayPalId(paypalPaymentId, payerId);
             if (response.getStatus().name().equals("completed")) {
-                // Lấy bookingId từ response hoặc từ Payment entity
-                Long bookingId = response.getBookingId();
-                System.out.println("Booking Id: " + bookingId);
-                ticketService.createTicketsFromBooking(bookingId, null);
+                // Tạo ticket cho tất cả booking IDs (hỗ trợ cả 1 booking và round-trip)
+                List<Long> bookingIds = response.getBookingIds();
+                if (bookingIds != null && !bookingIds.isEmpty()) {
+                    for (Long bookingId : bookingIds) {
+                        log.info("Creating tickets for Booking ID: {}", bookingId);
+                        ticketService.createTicketsFromBooking(bookingId, null);
+                    }
+                } else if (response.getBookingId() != null) {
+                    // Fallback for backward compatibility
+                    ticketService.createTicketsFromBooking(response.getBookingId(), null);
+                }
                 return ApiResponse.<PaymentResponseDTO>builder()
                         .code(HttpStatus.OK.value())
                         .message("Payment executed successfully")
@@ -157,10 +165,17 @@ public class PaymentController {
             PaymentResponseDTO response = vnPayPaymentStrategy.handleCallback(
                     transactionCode, responseCode, amount, orderInfo, vnpTransactionNo);
 
-            // Lấy bookingId từ response hoặc từ Payment entity
-            Long bookingId = response.getBookingId();
-            System.out.println("Booking Id: " + bookingId);
-            ticketService.createTicketsFromBooking(bookingId, null);
+            // Tạo ticket cho tất cả booking IDs (hỗ trợ cả 1 booking và round-trip)
+            List<Long> bookingIds = response.getBookingIds();
+            if (bookingIds != null && !bookingIds.isEmpty()) {
+                for (Long bookingId : bookingIds) {
+                    log.info("Creating tickets for Booking ID: {}", bookingId);
+                    ticketService.createTicketsFromBooking(bookingId, null);
+                }
+            } else if (response.getBookingId() != null) {
+                // Fallback for backward compatibility
+                ticketService.createTicketsFromBooking(response.getBookingId(), null);
+            }
 
             return ApiResponse.<PaymentResponseDTO>builder()
                     .code(HttpStatus.OK.value())
@@ -186,8 +201,17 @@ public class PaymentController {
 
             // Create tickets if payment successful
             if (response.getStatus().name().equals("completed")) {
-                Long bookingId = response.getBookingId();
-                ticketService.createTicketsFromBooking(bookingId, null);
+                // Tạo ticket cho tất cả booking IDs (hỗ trợ cả 1 booking và round-trip)
+                List<Long> bookingIds = response.getBookingIds();
+                if (bookingIds != null && !bookingIds.isEmpty()) {
+                    for (Long bookingId : bookingIds) {
+                        log.info("Creating tickets for Booking ID: {}", bookingId);
+                        ticketService.createTicketsFromBooking(bookingId, null);
+                    }
+                } else if (response.getBookingId() != null) {
+                    // Fallback for backward compatibility
+                    ticketService.createTicketsFromBooking(response.getBookingId(), null);
+                }
             }
 
             // Return response to ZaloPay (must return specific format)
@@ -232,11 +256,19 @@ public class PaymentController {
                 // Query ZaloPay to check payment status and process
                 PaymentResponseDTO response = zaloPayPaymentStrategy.queryAndProcessPayment(cleanAppTransId);
                 
-                // If payment successful, create tickets (same as VNPAY flow)
+                // If payment successful, create tickets for all bookings
                 if (response != null && response.getStatus() == PaymentStatus.completed) {
-                    Long bookingId = response.getBookingId();
-                    log.info("Creating tickets for Booking ID: {}", bookingId);
-                    ticketService.createTicketsFromBooking(bookingId, null);
+                    // Tạo ticket cho tất cả booking IDs (hỗ trợ cả 1 booking và round-trip)
+                    List<Long> bookingIds = response.getBookingIds();
+                    if (bookingIds != null && !bookingIds.isEmpty()) {
+                        for (Long bookingId : bookingIds) {
+                            log.info("Creating tickets for Booking ID: {}", bookingId);
+                            ticketService.createTicketsFromBooking(bookingId, null);
+                        }
+                    } else if (response.getBookingId() != null) {
+                        // Fallback for backward compatibility
+                        ticketService.createTicketsFromBooking(response.getBookingId(), null);
+                    }
                     
                     // Redirect to frontend success page
                     return new RedirectView("http://localhost:3000/bookingresult/" + response.getPaymentId());
@@ -264,12 +296,86 @@ public class PaymentController {
                     .result(PaymentResponseDTO.builder()
                             .paymentId(payment.getPaymentId())
                             .status(payment.getStatus())
-                            .bookingId(payment.getBooking().getId())
+                            .bookingId(payment.getBooking() != null ? payment.getBooking().getId() : null)
+                            .bookingIds(payment.getBookingIdList())
                             .build())
                     .build();
         } catch (Exception e) {
             log.error("Error getting payment by booking ID: ", e);
             return ApiResponse.error(HttpStatus.NOT_FOUND.value(), "Payment not found");
+        }
+    }
+
+    /**
+     * API để frontend gọi xác nhận thanh toán ZaloPay thành công
+     * Dùng khi ZaloPay không redirect về backend (môi trường localhost)
+     */
+    @PostMapping("/zalopay/confirm/{paymentId}")
+    @Operation(summary = "Confirm ZaloPay payment status and process if successful")
+    public ApiResponse<PaymentResponseDTO> confirmZaloPayPayment(@PathVariable Long paymentId) {
+        try {
+            log.info("Confirming ZaloPay payment for payment ID: {}", paymentId);
+            
+            // Lấy payment từ DB
+            Payment payment = paymentService.getPaymentById(paymentId);
+            
+            if (payment == null) {
+                return ApiResponse.error(HttpStatus.NOT_FOUND.value(), "Payment not found");
+            }
+            
+            // Nếu đã completed thì trả về luôn
+            if (payment.getStatus() == PaymentStatus.completed) {
+                return ApiResponse.<PaymentResponseDTO>builder()
+                        .code(HttpStatus.OK.value())
+                        .message("Payment already completed")
+                        .result(PaymentResponseDTO.builder()
+                                .paymentId(payment.getPaymentId())
+                                .status(PaymentStatus.completed)
+                                .bookingId(payment.getBooking() != null ? payment.getBooking().getId() : null)
+                                .bookingIds(payment.getBookingIdList())
+                                .build())
+                        .build();
+            }
+            
+            // Query ZaloPay và xử lý nếu thành công
+            String appTransId = payment.getPaymentGatewayId();
+            if (appTransId == null) {
+                return ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Payment gateway ID not found");
+            }
+            
+            PaymentResponseDTO response = zaloPayPaymentStrategy.queryAndProcessPayment(appTransId);
+            
+            if (response != null && response.getStatus() == PaymentStatus.completed) {
+                // Tạo ticket cho tất cả booking IDs (hỗ trợ cả 1 booking và round-trip)
+                List<Long> bookingIds = response.getBookingIds();
+                if (bookingIds != null && !bookingIds.isEmpty()) {
+                    for (Long bookingId : bookingIds) {
+                        log.info("Creating tickets for Booking ID: {}", bookingId);
+                        ticketService.createTicketsFromBooking(bookingId, null);
+                    }
+                } else if (response.getBookingId() != null) {
+                    // Fallback for backward compatibility
+                    ticketService.createTicketsFromBooking(response.getBookingId(), null);
+                }
+                
+                return ApiResponse.<PaymentResponseDTO>builder()
+                        .code(HttpStatus.OK.value())
+                        .message("Payment confirmed successfully")
+                        .result(response)
+                        .build();
+            } else {
+                return ApiResponse.<PaymentResponseDTO>builder()
+                        .code(HttpStatus.OK.value())
+                        .message("Payment not yet completed")
+                        .result(PaymentResponseDTO.builder()
+                                .paymentId(paymentId)
+                                .status(PaymentStatus.pending)
+                                .build())
+                        .build();
+            }
+        } catch (Exception e) {
+            log.error("Error confirming ZaloPay payment: ", e);
+            return ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Error confirming payment: " + e.getMessage());
         }
     }
 

@@ -30,7 +30,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,17 +49,33 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentResponseDTO createPayment(PaymentRequestDTO paymentRequest) {
-        // Lấy thông tin booking
-        Bookings booking = bookingsRepository.findById(paymentRequest.getBookingId())
-                .orElseThrow(() -> PaymentBookingException.bookingNotFound());
-
-        // Kiểm tra xem đã có payment nào cho booking này chưa
-        Payment existingPayment = findExistingPayment(booking.getId());
+        List<Long> allBookingIds = paymentRequest.getAllBookingIds();
+        
+        if (allBookingIds.isEmpty()) {
+            throw PaymentBookingException.bookingNotFound();
+        }
+        
+        // Lấy tất cả bookings
+        List<Bookings> bookings = new ArrayList<>();
+        for (Long bookingId : allBookingIds) {
+            Bookings booking = bookingsRepository.findById(bookingId)
+                    .orElseThrow(() -> PaymentBookingException.bookingNotFound());
+            bookings.add(booking);
+        }
+        
+        // Tính tổng tiền của tất cả bookings
+        BigDecimal totalAmount = bookings.stream()
+                .map(Bookings::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        // Kiểm tra xem đã có payment nào cho booking đầu tiên chưa (backward compatible)
+        Bookings firstBooking = bookings.get(0);
+        Payment existingPayment = findExistingPayment(firstBooking.getId());
 
         Payment paymentEntity;
         if (existingPayment != null) {
             paymentEntity = existingPayment;
-            log.info("Found existing payment for booking {}: Payment ID {}", booking.getId(),
+            log.info("Found existing payment for booking {}: Payment ID {}", firstBooking.getId(),
                     paymentEntity.getPaymentId());
 
             // Nếu payment đã completed hoặc cancelled, không cho phép thanh toán lại
@@ -67,10 +87,17 @@ public class PaymentServiceImpl implements PaymentService {
                 resetPaymentForRetry(paymentEntity);
             }
             // Nếu status là pending hoặc failed, cho phép tiếp tục thanh toán
+            
+            // Cập nhật lại amount và booking_ids nếu có thêm booking mới
+            paymentEntity.setAmount(totalAmount);
+            if (bookings.size() > 1) {
+                paymentEntity.setBookingIdList(allBookingIds);
+            }
+            paymentRepository.save(paymentEntity);
         } else {
             // Tạo payment mới
-            paymentEntity = createNewPayment(booking, paymentRequest);
-            log.info("Created new payment for booking {}: Payment ID {}", booking.getId(),
+            paymentEntity = createNewPaymentForMultipleBookings(bookings, totalAmount, paymentRequest);
+            log.info("Created new payment for {} booking(s): Payment ID {}", bookings.size(),
                     paymentEntity.getPaymentId());
         }
 
@@ -88,11 +115,16 @@ public class PaymentServiceImpl implements PaymentService {
                 auditLog.setAction("CREATE");
                 auditLog.setTargetEntity("PAYMENT");
                 auditLog.setTargetId(paymentEntity.getPaymentId());
+                
+                String bookingIdsStr = allBookingIds.stream()
+                        .map(String::valueOf)
+                        .collect(Collectors.joining(","));
+                
                 auditLog.setDetails(String.format(
-                        "{\"payment_id\":%d,\"booking_id\":%d,\"amount\":%.2f,\"payment_method\":\"%s\",\"transaction_code\":\"%s\",\"status\":\"%s\",\"action\":\"create\"}",
-                        paymentEntity.getPaymentId(), booking.getId(), paymentEntity.getAmount(),
+                        "{\"payment_id\":%d,\"booking_ids\":\"%s\",\"amount\":%.2f,\"payment_method\":\"%s\",\"transaction_code\":\"%s\",\"status\":\"%s\",\"action\":\"create\",\"is_round_trip\":%b}",
+                        paymentEntity.getPaymentId(), bookingIdsStr, paymentEntity.getAmount(),
                         paymentEntity.getPaymentMethod(), paymentEntity.getTransactionCode(),
-                        paymentEntity.getStatus()));
+                        paymentEntity.getStatus(), paymentRequest.isRoundTrip()));
                 auditLog.setUser(currentUser);
                 auditLogService.save(auditLog);
             } catch (Exception e) {
@@ -103,7 +135,8 @@ public class PaymentServiceImpl implements PaymentService {
                     .paymentId(paymentEntity.getPaymentId())
                     .status(PaymentStatus.pending)
                     .paymentUrl(paymentUrl)
-                    .bookingId(booking.getId())
+                    .bookingId(firstBooking.getId())
+                    .bookingIds(allBookingIds)
                     .build();
 
         } catch (Exception e) {
@@ -120,13 +153,40 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     /**
-     * Tạo payment mới
+     * Tạo payment mới cho một booking (backward compatible)
      */
     private Payment createNewPayment(Bookings booking, PaymentRequestDTO paymentRequest) {
         Payment paymentEntity = new Payment();
         paymentEntity.setBooking(booking);
         paymentEntity.setPaymentMethod(paymentRequest.getPaymentMethod());
         paymentEntity.setAmount(booking.getTotalAmount());
+        paymentEntity.setTransactionCode(generateTransactionCode());
+        paymentEntity.setStatus(PaymentStatus.pending);
+
+        return paymentRepository.save(paymentEntity);
+    }
+    
+    /**
+     * Tạo payment mới cho nhiều bookings (round trip)
+     */
+    private Payment createNewPaymentForMultipleBookings(List<Bookings> bookings, BigDecimal totalAmount, PaymentRequestDTO paymentRequest) {
+        Payment paymentEntity = new Payment();
+        
+        if (bookings.size() == 1) {
+            // Nếu chỉ có 1 booking, dùng cột booking_id (backward compatible)
+            paymentEntity.setBooking(bookings.get(0));
+            paymentEntity.setBookingIds(null);
+        } else {
+            // Nếu có nhiều booking (khứ hồi), dùng cột booking_ids
+            paymentEntity.setBooking(bookings.get(0)); // Set booking đầu tiên làm primary
+            List<Long> bookingIds = bookings.stream()
+                    .map(Bookings::getId)
+                    .collect(Collectors.toList());
+            paymentEntity.setBookingIdList(bookingIds);
+        }
+        
+        paymentEntity.setPaymentMethod(paymentRequest.getPaymentMethod());
+        paymentEntity.setAmount(totalAmount);
         paymentEntity.setTransactionCode(generateTransactionCode());
         paymentEntity.setStatus(PaymentStatus.pending);
 
@@ -344,6 +404,11 @@ public class PaymentServiceImpl implements PaymentService {
             throw PaymentNotFoundException.notFound();
         }
         return payment;
+    }
+
+    public Payment getPaymentById(Long paymentId) {
+        return paymentRepository.findById(paymentId)
+                .orElseThrow(() -> PaymentNotFoundException.notFound());
     }
 
     // Helper method to get current user from SecurityContext

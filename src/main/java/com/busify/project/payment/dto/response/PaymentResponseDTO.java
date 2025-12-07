@@ -9,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -20,5 +22,14 @@ public class PaymentResponseDTO {
     
     private String paymentUrl;
     
+    // Backward compatible - dùng cho 1 booking
     private Long bookingId;
+    
+    // Dùng cho nhiều booking (khứ hồi)
+    private List<Long> bookingIds;
+    
+    // Kiểm tra có phải round trip không
+    public boolean isRoundTrip() {
+        return bookingIds != null && bookingIds.size() > 1;
+    }
 }

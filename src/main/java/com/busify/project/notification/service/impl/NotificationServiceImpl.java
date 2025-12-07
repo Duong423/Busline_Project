@@ -47,21 +47,55 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public void handlePaymentSuccessEvent(PaymentSuccessEvent event) {
         Logger logger = Logger.getLogger(NotificationService.class.getName());
-        logger.info(
-                "Handling payment success event for payment ID: " + event.getPayment().getBooking().getGuestEmail());
+        
+        // Lấy thông tin payment
+        var payment = event.getPayment();
+        var booking = payment.getBooking();
+        
+        // Lấy email và operator ID - hỗ trợ cả 1 booking và nhiều booking
+        String guestEmail = "Unknown";
+        Long operatorId = null;
+        
+        if (booking != null) {
+            guestEmail = booking.getGuestEmail();
+            if (booking.getTrip() != null && booking.getTrip().getBus() != null 
+                && booking.getTrip().getBus().getOperator() != null) {
+                operatorId = booking.getTrip().getBus().getOperator().getId();
+            }
+        }
+        
+        // Xác định số lượng booking
+        List<Long> bookingIds = payment.getBookingIdList();
+        int bookingCount = bookingIds != null ? bookingIds.size() : (booking != null ? 1 : 0);
+        
+        logger.info("Handling payment success event for payment ID: " + payment.getPaymentId() 
+                + ", booking count: " + bookingCount);
+        
         final NotificationData data = new NotificationData();
         final String uid = UUID.randomUUID().toString();
         data.setId(uid);
-        final String message = "User " + event.getPayment().getBooking().getGuestEmail() + " has made a payment of "
-                + event.getPayment().getAmount();
+        
+        String message;
+        if (bookingCount > 1) {
+            message = "User " + guestEmail + " has made a round-trip payment of " + payment.getAmount() 
+                    + " for " + bookingCount + " bookings";
+        } else {
+            message = "User " + guestEmail + " has made a payment of " + payment.getAmount();
+        }
         data.setMessage(message);
         data.setTitle("A User has made a payment");
         data.setData(Map.of(
-                "paymentId", event.getPayment().getPaymentId(),
-                "amount", event.getPayment().getAmount()));
-        data.setSub("operator/" + event.getPayment().getBooking().getTrip().getBus().getOperator().getId());
-        notificationRepo.save(data);
-        notificationController.sendMessage(data);
+                "paymentId", payment.getPaymentId(),
+                "amount", payment.getAmount(),
+                "bookingCount", bookingCount));
+        
+        if (operatorId != null) {
+            data.setSub("operator/" + operatorId);
+            notificationRepo.save(data);
+            notificationController.sendMessage(data);
+        } else {
+            logger.warning("Could not determine operator ID for payment: " + payment.getPaymentId());
+        }
     }
 
     @Override
