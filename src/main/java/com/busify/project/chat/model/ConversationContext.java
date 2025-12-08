@@ -55,6 +55,16 @@ public class ConversationContext {
      * Ngày đi đã được xác định
      */
     private LocalDate departureDate;
+    
+    /**
+     * Ngày về (cho vé khứ hồi)
+     */
+    private LocalDate returnDate;
+    
+    /**
+     * Có phải vé khứ hồi không
+     */
+    private Boolean isRoundTrip;
 
     /**
      * Số lượng vé

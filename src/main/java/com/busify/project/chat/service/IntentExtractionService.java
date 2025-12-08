@@ -89,11 +89,19 @@ public class IntentExtractionService {
             - departure: Điểm đi (tên địa điểm)
             - destination: Điểm đến (tên địa điểm)
             - departureDate: Ngày đi (format: yyyy-MM-dd)
+            - returnDate: Ngày về (format: yyyy-MM-dd) - CHỈ có khi khách đặt vé khứ hồi
+            - isRoundTrip: true nếu khách muốn đặt vé khứ hồi (2 chiều), false nếu chỉ đi 1 chiều
             - numberOfTickets: Số lượng vé
             - busType: Loại xe (VIP, thường, giường nằm)
             - priceMin: Giá tối thiểu
             - priceMax: Giá tối đa
             - confidence: Độ tin cậy (0.0-1.0)
+            
+            QUAN TRỌNG - Nhận biết VÉ KHỨ HỒI:
+            - Các từ khóa khứ hồi: "khứ hồi", "2 chiều", "hai chiều", "đi về", "cả đi lẫn về", "về ngày", "ngày về"
+            - Nếu có từ khóa khứ hồi -> isRoundTrip = true
+            - Nếu có ngày về -> returnDate = ngày đó, isRoundTrip = true
+            - Nếu không có từ khóa khứ hồi và không có ngày về -> isRoundTrip = false (hoặc không set)
             
             Danh sách địa điểm ở Việt Nam (tỉnh, thành phố, bến xe):
             Miền Bắc: Hà Nội, Giáp Bát, Mỹ Đình, Hải Phòng, Hạ Long, Ninh Bình, Sapa,
@@ -111,24 +119,28 @@ public class IntentExtractionService {
                 "departure": "Cần Thơ",
                 "destination": "Giáp Bát",
                 "departureDate": "2025-11-29",
+                "isRoundTrip": false,
                 "confidence": 0.9
             }
             
-            Input: "Quảng Ngãi đến Hà Giang ngày 22-11"
+            Input: "Tìm vé khứ hồi từ Hà Nội đi Đà Nẵng, đi ngày 15/12, về ngày 20/12"
             Output: {
                 "intentType": "SEARCH_TRIP",
-                "departure": "Quảng Ngãi",
-                "destination": "Hà Giang",
-                "departureDate": "2025-11-22",
-                "confidence": 0.9
+                "departure": "Hà Nội",
+                "destination": "Đà Nẵng",
+                "departureDate": "2025-12-15",
+                "returnDate": "2025-12-20",
+                "isRoundTrip": true,
+                "confidence": 0.95
             }
             
-            Input: "tìm vé Đà Lạt đi Huế ngày 9/11"
+            Input: "Đặt vé 2 chiều Sài Gòn - Đà Lạt ngày 10/12"
             Output: {
-                "intentType": "SEARCH_TRIP",
-                "departure": "Đà Lạt",
-                "destination": "Huế",
-                "departureDate": "2025-11-09",
+                "intentType": "BOOK_TICKET",
+                "departure": "Sài Gòn",
+                "destination": "Đà Lạt",
+                "departureDate": "2025-12-10",
+                "isRoundTrip": true,
                 "confidence": 0.9
             }
             
@@ -137,6 +149,7 @@ public class IntentExtractionService {
                 "intentType": "SEARCH_TRIP",
                 "departure": "Hà Nội",
                 "destination": "Đà Nẵng",
+                "isRoundTrip": false,
                 "confidence": 0.8
             }
             
@@ -168,15 +181,27 @@ public class IntentExtractionService {
                     .priceMin(getDoubleValue(jsonNode, "priceMin", null))
                     .priceMax(getDoubleValue(jsonNode, "priceMax", null))
                     .confidence(getDoubleValue(jsonNode, "confidence", 0.7))
+                    .isRoundTrip(getBooleanValue(jsonNode, "isRoundTrip", false))
                     .additionalInfo(originalMessage);
                 
-                // Parse date
+                // Parse departureDate
                 String dateStr = getStringValue(jsonNode, "departureDate", null);
                 if (dateStr != null) {
                     try {
                         builder.departureDate(LocalDate.parse(dateStr));
                     } catch (Exception e) {
-                        log.warn("Failed to parse date: {}", dateStr);
+                        log.warn("Failed to parse departureDate: {}", dateStr);
+                    }
+                }
+                
+                // Parse returnDate (for round-trip)
+                String returnDateStr = getStringValue(jsonNode, "returnDate", null);
+                if (returnDateStr != null) {
+                    try {
+                        builder.returnDate(LocalDate.parse(returnDateStr));
+                        builder.isRoundTrip(true); // Nếu có returnDate thì chắc chắn là khứ hồi
+                    } catch (Exception e) {
+                        log.warn("Failed to parse returnDate: {}", returnDateStr);
                     }
                 }
                 
@@ -220,42 +245,103 @@ public class IntentExtractionService {
         
         SearchIntentDTO.SearchIntentDTOBuilder builder = SearchIntentDTO.builder();
         
-        message = message.toLowerCase();
+        String lowerMessage = message.toLowerCase();
         
         // Xác định intent type
-        if (message.contains("tìm") || message.contains("có") || message.contains("chuyến")) {
+        if (lowerMessage.contains("tìm") || lowerMessage.contains("có") || lowerMessage.contains("chuyến")) {
             builder.intentType("SEARCH_TRIP");
-        } else if (message.contains("đặt") || message.contains("book")) {
+        } else if (lowerMessage.contains("đặt") || lowerMessage.contains("book")) {
             builder.intentType("BOOK_TICKET");
-        } else if (message.contains("giá") || message.contains("bao nhiêu")) {
+        } else if (lowerMessage.contains("giá") || lowerMessage.contains("bao nhiêu")) {
             builder.intentType("ASK_PRICE");
-        } else if (message.contains("lịch") || message.contains("giờ")) {
+        } else if (lowerMessage.contains("lịch") || lowerMessage.contains("giờ")) {
             builder.intentType("ASK_SCHEDULE");
         } else {
             builder.intentType("GENERAL_QUESTION");
         }
         
+        // Nhận biết khứ hồi
+        boolean isRoundTrip = checkIsRoundTrip(lowerMessage);
+        builder.isRoundTrip(isRoundTrip);
+        
         // Trích xuất locations
-        String[] locations = extractLocations(message);
+        String[] locations = extractLocations(lowerMessage);
         if (locations[0] != null) builder.departure(locations[0]);
         if (locations[1] != null) builder.destination(locations[1]);
         
         // Trích xuất số vé
-        Integer tickets = extractNumberOfTickets(message);
+        Integer tickets = extractNumberOfTickets(lowerMessage);
         if (tickets != null) builder.numberOfTickets(tickets);
         
         // Trích xuất loại xe
-        String busType = extractBusType(message);
+        String busType = extractBusType(lowerMessage);
         if (busType != null) builder.busType(busType);
         
-        // Trích xuất ngày
-        LocalDate date = extractDate(message);
-        if (date != null) builder.departureDate(date);
+        // Trích xuất ngày đi và ngày về
+        LocalDate[] dates = extractDatesForRoundTrip(lowerMessage, isRoundTrip);
+        if (dates[0] != null) builder.departureDate(dates[0]);
+        if (dates[1] != null) {
+            builder.returnDate(dates[1]);
+            builder.isRoundTrip(true); // Chắc chắn là khứ hồi nếu có ngày về
+        }
         
         builder.confidence(0.6);
         builder.additionalInfo(message);
         
         return builder.build();
+    }
+    
+    /**
+     * Kiểm tra xem có phải vé khứ hồi không
+     */
+    private boolean checkIsRoundTrip(String message) {
+        // Các từ khóa khứ hồi
+        String[] roundTripKeywords = {
+            "khứ hồi", "khu hoi", "2 chiều", "hai chiều", "2 chieu", "hai chieu",
+            "đi về", "di ve", "cả đi lẫn về", "ca di lan ve",
+            "về ngày", "ve ngay", "ngày về", "ngay ve",
+            "round trip", "roundtrip", "round-trip"
+        };
+        
+        for (String keyword : roundTripKeywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Trích xuất ngày đi và ngày về cho khứ hồi
+     */
+    private LocalDate[] extractDatesForRoundTrip(String message, boolean isRoundTrip) {
+        LocalDate[] result = new LocalDate[2]; // [departureDate, returnDate]
+        
+        // Pattern cho ngày về: "về ngày X" hoặc "ngày về X"
+        Pattern returnDatePattern = Pattern.compile("(?:về\\s+ngày|ngày\\s+về)\\s*(\\d{1,2})[-/](\\d{1,2})(?:[-/](\\d{4}))?");
+        Matcher returnMatcher = returnDatePattern.matcher(message);
+        
+        if (returnMatcher.find()) {
+            try {
+                int day = Integer.parseInt(returnMatcher.group(1));
+                int month = Integer.parseInt(returnMatcher.group(2));
+                int year = returnMatcher.group(3) != null ? 
+                    Integer.parseInt(returnMatcher.group(3)) : LocalDate.now().getYear();
+                result[1] = LocalDate.of(year, month, day);
+                
+                // Nếu ngày về đã qua, lấy năm sau
+                if (result[1].isBefore(LocalDate.now())) {
+                    result[1] = result[1].plusYears(1);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse return date");
+            }
+        }
+        
+        // Trích xuất ngày đi bình thường
+        result[0] = extractDate(message);
+        
+        return result;
     }
 
     /**
@@ -468,6 +554,18 @@ public class IntentExtractionService {
                 return Double.valueOf(node.get(field).asDouble());
             } catch (Exception e) {
                 log.warn("Failed to parse double value for field '{}': {}", field, e.getMessage());
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+    
+    private Boolean getBooleanValue(JsonNode node, String field, Boolean defaultValue) {
+        if (node.has(field) && !node.get(field).isNull()) {
+            try {
+                return Boolean.valueOf(node.get(field).asBoolean());
+            } catch (Exception e) {
+                log.warn("Failed to parse boolean value for field '{}': {}", field, e.getMessage());
                 return defaultValue;
             }
         }

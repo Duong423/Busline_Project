@@ -78,9 +78,36 @@ public class SmartChatBotService {
                 "\nVí dụ: Tôi muốn đi từ Hà Nội đến Đà Nẵng vào ngày mai"
             );
         }
+        
+        // Kiểm tra nếu là khứ hồi nhưng thiếu ngày về
+        if (Boolean.TRUE.equals(intent.getIsRoundTrip()) && intent.getReturnDate() == null) {
+            return createNeedMoreInfoResponse(intent,
+                "🔄 Bạn muốn đặt vé **khứ hồi** từ **" + intent.getDeparture() + "** đến **" + intent.getDestination() + "**.\n\n" +
+                "📅 Bạn đã chọn ngày đi: " + (intent.getDepartureDate() != null ? intent.getDepartureDate() : "chưa chọn") + "\n" +
+                "📅 Vui lòng cho tôi biết **ngày về** của bạn?\n\n" +
+                "Ví dụ: Về ngày 15/12 hoặc Ngày về là 15/12"
+            );
+        }
 
-        // Tìm kiếm chuyến đi
+        // Tìm kiếm chuyến đi (chiều đi)
         List<TripSearchResultDTO> trips = tripSearchService.searchTrips(intent);
+        
+        // Nếu là khứ hồi, tìm thêm chuyến về
+        List<TripSearchResultDTO> returnTrips = new ArrayList<>();
+        if (Boolean.TRUE.equals(intent.getIsRoundTrip()) && intent.getReturnDate() != null) {
+            // Tạo intent cho chiều về (đảo ngược departure và destination)
+            SearchIntentDTO returnIntent = SearchIntentDTO.builder()
+                .intentType(intent.getIntentType())
+                .departure(intent.getDestination()) // Đảo ngược
+                .destination(intent.getDeparture()) // Đảo ngược
+                .departureDate(intent.getReturnDate()) // Ngày về
+                .numberOfTickets(intent.getNumberOfTickets())
+                .busType(intent.getBusType())
+                .build();
+            
+            returnTrips = tripSearchService.searchTrips(returnIntent);
+            log.info("Found {} return trips for round-trip search", returnTrips.size());
+        }
 
         if (trips.isEmpty()) {
             return createNoResultResponse(intent, 
@@ -95,7 +122,7 @@ public class SmartChatBotService {
         }
 
         // Tạo response text từ AI
-        String aiText = generateSearchResultText(intent, trips, userEmail);
+        String aiText = generateSearchResultText(intent, trips, returnTrips, userEmail);
 
         return AIResponseDTO.builder()
             .type(AIResponseDTO.ResponseType.PRODUCT_SEARCH)
@@ -300,8 +327,15 @@ public class SmartChatBotService {
     /**
      * Tạo text mô tả kết quả tìm kiếm
      */
-    private String generateSearchResultText(SearchIntentDTO intent, List<TripSearchResultDTO> trips, String userEmail) {
+    private String generateSearchResultText(SearchIntentDTO intent, List<TripSearchResultDTO> trips, List<TripSearchResultDTO> returnTrips, String userEmail) {
         StringBuilder text = new StringBuilder();
+        
+        // Kiểm tra nếu là khứ hồi
+        boolean isRoundTrip = Boolean.TRUE.equals(intent.getIsRoundTrip()) && intent.getReturnDate() != null;
+        
+        if (isRoundTrip) {
+            text.append("🔄 **VÉ KHỨ HỒI**\n\n");
+        }
         
         text.append("🎉 Tuyệt vời! Tôi tìm thấy **").append(trips.size())
             .append(" chuyến xe** từ **").append(intent.getDeparture())
@@ -312,6 +346,11 @@ public class SmartChatBotService {
         }
         
         text.append(".\n\n");
+        
+        // CHIỀU ĐI
+        if (isRoundTrip) {
+            text.append("📤 **CHIỀU ĐI** (").append(intent.getDepartureDate()).append("):\n\n");
+        }
         
         // Thông tin chi tiết về các chuyến (top 3)
         int displayCount = Math.min(3, trips.size());
@@ -341,6 +380,47 @@ public class SmartChatBotService {
         
         if (trips.size() > 3) {
             text.append("_...và ").append(trips.size() - 3).append(" chuyến khác nữa!_\n\n");
+        }
+        
+        // CHIỀU VỀ (nếu là khứ hồi)
+        if (isRoundTrip && returnTrips != null && !returnTrips.isEmpty()) {
+            text.append("📥 **CHIỀU VỀ** (").append(intent.getReturnDate()).append("):\n");
+            text.append("Từ **").append(intent.getDestination()).append("** về **").append(intent.getDeparture()).append("**\n\n");
+            
+            int returnDisplayCount = Math.min(3, returnTrips.size());
+            for (int i = 0; i < returnDisplayCount; i++) {
+                TripSearchResultDTO trip = returnTrips.get(i);
+                text.append("🚌 **Chuyến ").append(i + 1).append("**: ")
+                    .append(trip.getBusType())
+                    .append(" - Khởi hành lúc ")
+                    .append(trip.getDepartureTime().toLocalTime())
+                    .append("\n   💰 Giá: ");
+                
+                if (trip.getHasPromotion() && trip.getDiscountedPrice() != null) {
+                    text.append("~~").append(String.format("%,.0f", trip.getPrice())).append("đ~~ → ")
+                        .append("**").append(String.format("%,.0f", trip.getDiscountedPrice())).append("đ** 🎁\n");
+                } else {
+                    text.append("**").append(String.format("%,.0f", trip.getPrice())).append("đ**\n");
+                }
+                
+                text.append("   🪑 Còn ").append(trip.getAvailableSeats()).append(" ghế trống\n\n");
+            }
+            
+            if (returnTrips.size() > 3) {
+                text.append("_...và ").append(returnTrips.size() - 3).append(" chuyến về khác!_\n\n");
+            }
+            
+            // Tính tổng giá khứ hồi
+            double goPrice = trips.get(0).getDiscountedPrice() != null ? 
+                trips.get(0).getDiscountedPrice() : trips.get(0).getPrice();
+            double returnPrice = returnTrips.get(0).getDiscountedPrice() != null ? 
+                returnTrips.get(0).getDiscountedPrice() : returnTrips.get(0).getPrice();
+            
+            text.append("💵 **Tổng giá khứ hồi (ước tính)**: **")
+                .append(String.format("%,.0f", goPrice + returnPrice)).append("đ**\n\n");
+        } else if (isRoundTrip) {
+            text.append("⚠️ **Chiều về**: Không tìm thấy chuyến phù hợp vào ngày ")
+                .append(intent.getReturnDate()).append("\n\n");
         }
         
         text.append("Bạn có thể chọn chuyến phù hợp và đặt vé ngay nhé! 🎫");

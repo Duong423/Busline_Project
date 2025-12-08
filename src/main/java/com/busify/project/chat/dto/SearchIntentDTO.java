@@ -36,6 +36,16 @@ public class SearchIntentDTO {
     private LocalDate departureDate;
     
     /**
+     * Ngày về (format: yyyy-MM-dd) - dùng cho vé khứ hồi
+     */
+    private LocalDate returnDate;
+    
+    /**
+     * Có phải vé khứ hồi không
+     */
+    private Boolean isRoundTrip;
+    
+    /**
      * Số lượng vé
      */
     private Integer numberOfTickets;

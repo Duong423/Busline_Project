@@ -81,6 +81,16 @@ public class ConversationContextService {
         if (intent.getDepartureDate() != null) {
             context.setDepartureDate(intent.getDepartureDate());
         }
+        
+        // Cập nhật returnDate (cho khứ hồi)
+        if (intent.getReturnDate() != null) {
+            context.setReturnDate(intent.getReturnDate());
+        }
+        
+        // Cập nhật isRoundTrip
+        if (intent.getIsRoundTrip() != null) {
+            context.setIsRoundTrip(intent.getIsRoundTrip());
+        }
 
         // Cập nhật numberOfTickets
         if (intent.getNumberOfTickets() != null) {
@@ -114,10 +124,12 @@ public class ConversationContextService {
         ConversationContext context = getOrCreateContext(userEmail);
 
         log.info("Merging context for user: {}", userEmail);
-        log.info("Context - Departure: {}, Destination: {}, Date: {}", 
-            context.getDeparture(), context.getDestination(), context.getDepartureDate());
-        log.info("New Intent - Departure: {}, Destination: {}, Date: {}", 
-            newIntent.getDeparture(), newIntent.getDestination(), newIntent.getDepartureDate());
+        log.info("Context - Departure: {}, Destination: {}, Date: {}, ReturnDate: {}, IsRoundTrip: {}", 
+            context.getDeparture(), context.getDestination(), context.getDepartureDate(),
+            context.getReturnDate(), context.getIsRoundTrip());
+        log.info("New Intent - Departure: {}, Destination: {}, Date: {}, ReturnDate: {}, IsRoundTrip: {}", 
+            newIntent.getDeparture(), newIntent.getDestination(), newIntent.getDepartureDate(),
+            newIntent.getReturnDate(), newIntent.getIsRoundTrip());
 
         // Tạo intent mới bằng cách merge context và intent mới
         SearchIntentDTO mergedIntent = SearchIntentDTO.builder()
@@ -133,6 +145,10 @@ public class ConversationContextService {
             .destination(newIntent.getDestination() != null ? newIntent.getDestination() : context.getDestination())
             // Departure date: ưu tiên intent mới, fallback về context
             .departureDate(newIntent.getDepartureDate() != null ? newIntent.getDepartureDate() : context.getDepartureDate())
+            // Return date: ưu tiên intent mới, fallback về context (cho khứ hồi)
+            .returnDate(newIntent.getReturnDate() != null ? newIntent.getReturnDate() : context.getReturnDate())
+            // Is round trip: ưu tiên intent mới, fallback về context
+            .isRoundTrip(newIntent.getIsRoundTrip() != null ? newIntent.getIsRoundTrip() : context.getIsRoundTrip())
             // Number of tickets: ưu tiên intent mới, fallback về context
             .numberOfTickets(newIntent.getNumberOfTickets() != null ? newIntent.getNumberOfTickets() : context.getNumberOfTickets())
             // Bus type: ưu tiên intent mới, fallback về context
@@ -145,8 +161,9 @@ public class ConversationContextService {
             .additionalInfo(newIntent.getAdditionalInfo())
             .build();
 
-        log.info("Merged Intent - Departure: {}, Destination: {}, Date: {}", 
-            mergedIntent.getDeparture(), mergedIntent.getDestination(), mergedIntent.getDepartureDate());
+        log.info("Merged Intent - Departure: {}, Destination: {}, Date: {}, ReturnDate: {}, IsRoundTrip: {}", 
+            mergedIntent.getDeparture(), mergedIntent.getDestination(), mergedIntent.getDepartureDate(),
+            mergedIntent.getReturnDate(), mergedIntent.getIsRoundTrip());
 
         return mergedIntent;
     }
