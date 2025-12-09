@@ -3,7 +3,9 @@ package com.busify.project.trip_seat.services;
 import com.busify.project.booking.entity.Bookings;
 import com.busify.project.booking.enums.BookingStatus;
 import com.busify.project.booking.repository.BookingRepository;
+import com.busify.project.payment.entity.Payment;
 import com.busify.project.payment.enums.PaymentStatus;
+import com.busify.project.payment.repository.PaymentRepository;
 import com.busify.project.promotion.entity.Promotion;
 import com.busify.project.promotion.service.impl.PromotionServiceImpl;
 import com.busify.project.trip_seat.enums.TripSeatStatus;
@@ -32,6 +34,7 @@ public class SeatReleaseService {
 
     private final TripSeatRepository tripSeatRepository;
     private final BookingRepository bookingRepository;
+    private final PaymentRepository paymentRepository;
     // private final PromotionServiceImpl promotionService;
 
     private final Map<Long, CompletableFuture<Void>> activeReleaseTasks = new ConcurrentHashMap<>();
@@ -155,50 +158,105 @@ public class SeatReleaseService {
 
         if (booking.getPayment() != null && booking.getPayment().getStatus() != PaymentStatus.pending)
             return;
+        
+        // Kiểm tra xem booking này có thuộc payment khứ hồi không
+        List<Long> relatedBookingIds = findRelatedRoundTripBookings(bookingId);
+        
+        if (relatedBookingIds.size() > 1) {
+            // Đây là booking khứ hồi - cần hủy tất cả các booking liên quan
+            log.info("Detected round-trip booking. Will cancel all {} related bookings: {}", 
+                relatedBookingIds.size(), relatedBookingIds);
+            
+            for (Long relatedBookingId : relatedBookingIds) {
+                Bookings relatedBooking = bookingRepository.findById(relatedBookingId).orElse(null);
+                if (relatedBooking != null && relatedBooking.getStatus() != BookingStatus.canceled_by_operator) {
+                    // Hủy release task cho booking liên quan (nếu có)
+                    cancelReleaseTask(relatedBookingId);
+                    
+                    // Release seats và cancel booking
+                    releaseSeatsForBooking(relatedBooking);
+                    
+                    relatedBooking.setStatus(BookingStatus.canceled_by_operator);
+                    relatedBooking.setAppliedDiscountCode(null);
+                    relatedBooking.setAppliedPromotionId(null);
+                    bookingRepository.save(relatedBooking);
+                    
+                    log.info("Cancelled round-trip booking ID: {}", relatedBookingId);
+                }
+            }
+        } else {
+            // Booking đơn lẻ - xử lý như cũ
+            tripSeatRepository.findTripSeatBySeatNumberAndTripId(seatNumber, booking.getTrip().getId())
+                    .ifPresent(seat -> {
+                        log.info("Releasing seat {} for expired booking {}", seat.getId().getSeatNumber(),
+                                booking.getId());
+                        if (seat.getStatus() == TripSeatStatus.locked) {
+                            seat.setStatus(TripSeatStatus.available);
+                            seat.setLockingUser(null);
+                            seat.setLockedAt(null);
+                            tripSeatRepository.save(seat);
+                        }
+                    });
 
-        tripSeatRepository.findTripSeatBySeatNumberAndTripId(seatNumber, booking.getTrip().getId())
-                .ifPresent(seat -> {
-                    log.info("Releasing seat {} for expired booking {}", seat.getId().getSeatNumber(),
-                            booking.getId());
-                    if (seat.getStatus() == TripSeatStatus.locked) {
-                        seat.setStatus(TripSeatStatus.available);
-                        seat.setLockingUser(null);
-                        seat.setLockedAt(null);
-                        tripSeatRepository.save(seat);
-                    }
-                });
-
-        // Note: Return promotions that were applied to this booking when releasing
-        // expired booking
-        // try {
-        // Profile user = (Profile) booking.getCustomer();
-        // if (user != null) {
-        // // Return COUPON promotion if discount code was applied
-        // if (booking.getAppliedDiscountCode() != null &&
-        // !booking.getAppliedDiscountCode().trim().isEmpty()) {
-        // promotionService.removeMarkPromotionAsUsed(user.getId(),
-        // booking.getAppliedDiscountCode());
-        // log.info("Returned coupon promotion {} to user {} for expired booking {}",
-        // booking.getAppliedDiscountCode(), user.getId(), booking.getId());
-        // }
-
-        // // Return AUTO promotion if promotion ID was applied
-        // if (booking.getAppliedPromotionId() != null) {
-        // promotionService.removeAutoPromotionUsage(user.getId(),
-        // booking.getAppliedPromotionId());
-        // log.info("Returned auto promotion {} to user {} for expired booking {}",
-        // booking.getAppliedPromotionId(), user.getId(), booking.getId());
-        // }
-        // }
-        // } catch (Exception e) {
-        // log.error("Error returning promotions for expired booking {}: {}",
-        // booking.getId(), e.getMessage(), e);
-        // }
-
-        booking.setStatus(BookingStatus.canceled_by_operator);
-        booking.setAppliedDiscountCode(null);
-        booking.setAppliedPromotionId(null);
-        bookingRepository.save(booking);
+            booking.setStatus(BookingStatus.canceled_by_operator);
+            booking.setAppliedDiscountCode(null);
+            booking.setAppliedPromotionId(null);
+            bookingRepository.save(booking);
+        }
+    }
+    
+    /**
+     * Tìm tất cả booking IDs liên quan trong payment khứ hồi
+     */
+    private List<Long> findRelatedRoundTripBookings(Long bookingId) {
+        // Tìm payment chứa bookingId này (qua cột booking_ids)
+        List<Payment> payments = paymentRepository.findByBookingIdsContaining(bookingId.toString());
+        
+        for (Payment payment : payments) {
+            if (payment.isRoundTrip()) {
+                List<Long> allBookingIds = payment.getBookingIdList();
+                if (allBookingIds.contains(bookingId)) {
+                    log.info("Found round-trip payment {} (via booking_ids) with bookings: {}", 
+                        payment.getPaymentId(), allBookingIds);
+                    return allBookingIds;
+                }
+            }
+        }
+        
+        // Cũng kiểm tra qua cột booking_id (primary booking)
+        Payment primaryPayment = paymentRepository.findByBookingId(bookingId);
+        if (primaryPayment != null && primaryPayment.isRoundTrip()) {
+            List<Long> allBookingIds = primaryPayment.getBookingIdList();
+            log.info("Found round-trip payment {} (via booking_id) with bookings: {}", 
+                primaryPayment.getPaymentId(), allBookingIds);
+            return allBookingIds;
+        }
+        
+        // Không phải khứ hồi, trả về chỉ bookingId hiện tại
+        return List.of(bookingId);
+    }
+    
+    /**
+     * Release tất cả seats của một booking
+     */
+    private void releaseSeatsForBooking(Bookings booking) {
+        if (booking.getSeatNumber() == null) return;
+        
+        String[] seatNumbers = booking.getSeatNumber().split(",");
+        for (String seatNum : seatNumbers) {
+            tripSeatRepository.findTripSeatBySeatNumberAndTripId(
+                    seatNum.trim(), booking.getTrip().getId())
+                    .ifPresent(seat -> {
+                        if (seat.getStatus() == TripSeatStatus.locked) {
+                            seat.setStatus(TripSeatStatus.available);
+                            seat.setLockingUser(null);
+                            seat.setLockedAt(null);
+                            tripSeatRepository.save(seat);
+                            log.info("Released seat {} for booking {}", 
+                                seat.getId().getSeatNumber(), booking.getId());
+                        }
+                    });
+        }
     }
 
     /**
@@ -216,57 +274,42 @@ public class SeatReleaseService {
         if (booking.getCreatedAt().isAfter(cutoffTime.atZone(java.time.ZoneId.systemDefault()).toInstant())) {
             return;
         }
+        
+        // Kiểm tra xem booking này có thuộc payment khứ hồi không
+        List<Long> relatedBookingIds = findRelatedRoundTripBookings(booking.getId());
+        
+        if (relatedBookingIds.size() > 1) {
+            // Đây là booking khứ hồi - cần hủy tất cả các booking liên quan
+            log.info("Detected round-trip expired booking. Will cancel all {} related bookings: {}", 
+                relatedBookingIds.size(), relatedBookingIds);
+            
+            for (Long relatedBookingId : relatedBookingIds) {
+                Bookings relatedBooking = bookingRepository.findById(relatedBookingId).orElse(null);
+                if (relatedBooking != null && relatedBooking.getStatus() != BookingStatus.canceled_by_operator) {
+                    // Hủy release task cho booking liên quan (nếu có)
+                    cancelReleaseTask(relatedBookingId);
+                    
+                    // Release seats
+                    releaseSeatsForBooking(relatedBooking);
+                    
+                    // Cancel the booking
+                    relatedBooking.setStatus(BookingStatus.canceled_by_operator);
+                    relatedBooking.setAppliedDiscountCode(null);
+                    relatedBooking.setAppliedPromotionId(null);
+                    bookingRepository.save(relatedBooking);
+                    log.info("Cancelled expired round-trip booking ID: {}", relatedBookingId);
+                }
+            }
+        } else {
+            // Booking đơn lẻ - xử lý như cũ
+            releaseSeatsForBooking(booking);
 
-        // Release the seat
-
-        String[] seatNumbers = booking.getSeatNumber().split(",");
-        for (String seatNum : seatNumbers) {
-            tripSeatRepository.findTripSeatBySeatNumberAndTripId(
-                    seatNum, booking.getTrip().getId())
-                    .ifPresent(seat -> {
-                        if (seat.getStatus() == TripSeatStatus.locked) {
-                            seat.setStatus(TripSeatStatus.available);
-                            seat.setLockingUser(null);
-                            seat.setLockedAt(null);
-                            tripSeatRepository.save(seat);
-                            log.info("Released seat {} for expired booking {}", seat.getId().getSeatNumber(),
-                                    booking.getId());
-                        }
-                    });
+            // Cancel the booking
+            booking.setStatus(BookingStatus.canceled_by_operator);
+            booking.setAppliedDiscountCode(null);
+            booking.setAppliedPromotionId(null);
+            bookingRepository.save(booking);
+            log.info("Cancelled expired booking ID: {}", booking.getId());
         }
-
-        // // Note: Return promotions that were applied to this booking when releasing
-        // // expired booking
-        // try {
-        // Profile user = (Profile) booking.getCustomer();
-        // if (user != null) {
-        // // Return COUPON promotion if discount code was applied
-        // if (booking.getAppliedDiscountCode() != null &&
-        // !booking.getAppliedDiscountCode().trim().isEmpty()) {
-        // promotionService.removeMarkPromotionAsUsed(user.getId(),
-        // booking.getAppliedDiscountCode());
-        // log.info("Returned coupon promotion {} to user {} for expired booking {}",
-        // booking.getAppliedDiscountCode(), user.getId(), booking.getId());
-        // }
-
-        // // Return AUTO promotion if promotion ID was applied
-        // if (booking.getAppliedPromotionId() != null) {
-        // promotionService.removeAutoPromotionUsage(user.getId(),
-        // booking.getAppliedPromotionId());
-        // log.info("Returned auto promotion {} to user {} for expired booking {}",
-        // booking.getAppliedPromotionId(), user.getId(), booking.getId());
-        // }
-        // }
-        // } catch (Exception e) {
-        // log.error("Error returning promotions for expired booking {}: {}",
-        // booking.getId(), e.getMessage(), e);
-        // }
-
-        // Cancel the booking
-        booking.setStatus(BookingStatus.canceled_by_operator);
-        booking.setAppliedDiscountCode(null);
-        booking.setAppliedPromotionId(null);
-        bookingRepository.save(booking);
-        log.info("Cancelled expired booking ID: {}", booking.getId());
     }
 }
