@@ -24,17 +24,22 @@ public class SmartChatBotService {
     private final TripSearchService tripSearchService;
     private final OpenAIService openAIService;
     private final ConversationContextService conversationContextService;
+    private final AIChatHistoryService chatHistoryService;
 
     /**
      * Xử lý tin nhắn thông minh - trích xuất ý định và tìm kiếm sản phẩm
+     * Sử dụng lịch sử chat để AI hiểu ngữ cảnh hội thoại tốt hơn
      */
     public AIResponseDTO processSmartMessage(String userMessage, String userEmail) {
         try {
             log.info("Processing smart message from user: {}", userEmail);
 
-            // 1. Trích xuất ý định từ tin nhắn
-            SearchIntentDTO rawIntent = intentExtractionService.extractSearchIntent(userMessage);
-            log.info("Extracted raw intent: {}", rawIntent.getIntentType());
+            // 0. Lưu tin nhắn của user vào lịch sử
+            chatHistoryService.saveUserMessage(userEmail, userMessage);
+
+            // 1. Trích xuất ý định từ tin nhắn (SỬ DỤNG LỊCH SỬ CHAT)
+            SearchIntentDTO rawIntent = intentExtractionService.extractSearchIntentWithHistory(userEmail, userMessage);
+            log.info("Extracted raw intent with history: {}", rawIntent.getIntentType());
 
             // 2. Merge với context từ các tin nhắn trước
             SearchIntentDTO intent = conversationContextService.mergeContextWithIntent(userEmail, rawIntent);
@@ -52,6 +57,9 @@ public class SmartChatBotService {
                 case "BOOK_TICKET" -> handleBookTicket(intent, userMessage, userEmail);
                 default -> handleGeneralQuestion(userMessage, userEmail);
             };
+
+            // 5. Lưu response của AI vào lịch sử
+            chatHistoryService.saveAssistantMessage(userEmail, response.getContent());
 
             response.setTimestamp(System.currentTimeMillis());
             return response;

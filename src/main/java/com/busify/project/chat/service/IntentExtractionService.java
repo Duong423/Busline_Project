@@ -2,6 +2,7 @@ package com.busify.project.chat.service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.busify.project.chat.dto.SearchIntentDTO;
+import com.busify.project.chat.model.AIChatHistory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,12 +28,13 @@ public class IntentExtractionService {
 
     private final OpenRouterService openRouterService;
     private final ObjectMapper objectMapper;
+    private final AIChatHistoryService chatHistoryService;
     
     @Value("${openai.api.key:}")
     private String openaiApiKey;
 
     /**
-     * Trích xuất ý định tìm kiếm từ tin nhắn của user
+     * Trích xuất ý định tìm kiếm từ tin nhắn của user (KHÔNG có lịch sử)
      */
     public SearchIntentDTO extractSearchIntent(String userMessage) {
         try {
@@ -75,6 +78,131 @@ public class IntentExtractionService {
             log.error("Error extracting intent, using regex fallback", e);
             return extractIntentWithRegex(userMessage);
         }
+    }
+
+    /**
+     * Trích xuất ý định tìm kiếm từ tin nhắn của user (CÓ lịch sử hội thoại)
+     * Phương thức này sử dụng lịch sử chat để AI hiểu rõ ngữ cảnh hội thoại
+     * 
+     * Ví dụ:
+     * - User: "tôi muốn đặt chuyến đi đà nẵng"
+     * - AI: "bạn muốn xuất phát từ đâu đi đà nẵng và vào ngày nào"
+     * - User: "huế" 
+     * -> AI sẽ hiểu "huế" là điểm đi dựa vào ngữ cảnh trước đó
+     */
+    public SearchIntentDTO extractSearchIntentWithHistory(String userEmail, String userMessage) {
+        try {
+            log.info("Extracting search intent with history for user: {}", userEmail);
+
+            // Lấy lịch sử chat gần đây
+            List<AIChatHistory> history = chatHistoryService.getRecentHistory(userEmail);
+            log.info("📜 Found {} messages in chat history", history.size());
+
+            // Tạo prompt với ngữ cảnh hội thoại
+            String systemPrompt = createIntentExtractionPromptWithContext();
+            
+            // Build messages list với lịch sử
+            List<OpenRouterService.Message> messages = new ArrayList<>();
+            messages.add(new OpenRouterService.Message("system", systemPrompt));
+            
+            // Thêm lịch sử hội thoại (từ cũ đến mới)
+            for (AIChatHistory chat : history) {
+                messages.add(new OpenRouterService.Message(chat.getRole(), chat.getContent()));
+            }
+            
+            // Thêm tin nhắn hiện tại
+            messages.add(new OpenRouterService.Message("user", userMessage));
+            
+            log.info("📤 Sending {} messages to AI (including history)", messages.size());
+
+            // Gọi AI để trích xuất
+            String aiResponse = openRouterService.getChatCompletion(
+                openaiApiKey,
+                "google/gemini-2.5-flash",
+                messages,
+                500,
+                0.3
+            );
+
+            if (aiResponse != null && !aiResponse.trim().isEmpty()) {
+                log.info("🤖 AI Response with context: {}", aiResponse);
+                
+                SearchIntentDTO intent = parseAIResponse(aiResponse, userMessage);
+                log.info("✅ Extracted intent with history: {}", intent);
+                return intent;
+            } else {
+                log.warn("⚠️ AI returned empty, using regex fallback");
+                return extractIntentWithRegex(userMessage);
+            }
+
+        } catch (Exception e) {
+            log.error("Error extracting intent with history, using regex fallback", e);
+            return extractIntentWithRegex(userMessage);
+        }
+    }
+
+    /**
+     * Tạo prompt cho AI với hướng dẫn sử dụng ngữ cảnh hội thoại
+     */
+    private String createIntentExtractionPromptWithContext() {
+        return """
+            Bạn là trợ lý trích xuất thông tin đặt vé xe từ cuộc hội thoại với khách hàng.
+            
+            QUAN TRỌNG - SỬ DỤNG NGỮ CẢNH HỘI THOẠI:
+            - Bạn sẽ nhận được LỊCH SỬ HỘI THOẠI trước đó
+            - Hãy sử dụng ngữ cảnh này để hiểu ý định người dùng
+            - Nếu người dùng trả lời ngắn gọn (ví dụ: "huế", "ngày mai", "2 vé"), hãy kết hợp với câu hỏi trước đó để hiểu
+            
+            VÍ DỤ NGỮ CẢNH:
+            - Assistant: "bạn muốn xuất phát từ đâu đi đà nẵng?"
+            - User: "huế" 
+            -> departure = "Huế", destination = "Đà Nẵng" (từ ngữ cảnh trước)
+            
+            - Assistant: "bạn muốn đi ngày nào?"
+            - User: "ngày mai"
+            -> departureDate = ngày mai (tính từ hôm nay)
+            
+            - Assistant: "bạn cần bao nhiêu vé?"
+            - User: "3"
+            -> numberOfTickets = 3
+            
+            Nhiệm vụ: Phân tích TẤT CẢ thông tin từ cuộc hội thoại và trích xuất:
+            - intentType: SEARCH_TRIP (tìm chuyến), BOOK_TICKET (đặt vé), ASK_PRICE (hỏi giá), ASK_SCHEDULE (hỏi lịch), GENERAL_QUESTION
+            - departure: Điểm đi (tên địa điểm)
+            - destination: Điểm đến (tên địa điểm)
+            - departureDate: Ngày đi (format: yyyy-MM-dd)
+            - returnDate: Ngày về (format: yyyy-MM-dd) - CHỈ có khi khách đặt vé khứ hồi
+            - isRoundTrip: true nếu khách muốn đặt vé khứ hồi (2 chiều), false nếu chỉ đi 1 chiều
+            - numberOfTickets: Số lượng vé
+            - busType: Loại xe (VIP, thường, giường nằm)
+            - priceMin: Giá tối thiểu
+            - priceMax: Giá tối đa
+            - confidence: Độ tin cậy (0.0-1.0)
+            
+            QUAN TRỌNG - Nhận biết VÉ KHỨ HỒI:
+            - Các từ khóa khứ hồi: "khứ hồi", "2 chiều", "hai chiều", "đi về", "cả đi lẫn về", "về ngày", "ngày về"
+            - Nếu có từ khóa khứ hồi -> isRoundTrip = true
+            - Nếu có ngày về -> returnDate = ngày đó, isRoundTrip = true
+            
+            Danh sách địa điểm ở Việt Nam (tỉnh, thành phố, bến xe):
+            Miền Bắc: Hà Nội, Giáp Bát, Mỹ Đình, Hải Phòng, Hạ Long, Ninh Bình, Sapa,
+                      Hà Giang, Cao Bằng, Lào Cai, Điện Biên, Sơn La, Yên Bái,
+            Miền Trung: Đà Nẵng, Huế, Nha Trang, Đà Lạt, Hội An, Quy Nhơn, Vũng Tàu,
+                        Thanh Hóa, Vinh, Quảng Bình, Quảng Trị, Quảng Nam, Quảng Ngãi,
+            Miền Nam: TP.HCM, Sài Gòn, Miền Đông, Miền Tây, Cần Thơ, An Giang, Kiên Giang,
+                      Đồng Nai, Bình Dương, Vĩnh Long, Cà Mau
+            
+            Trả về CHỈ JSON object (không có text khác). Ví dụ:
+            {
+                "intentType": "SEARCH_TRIP",
+                "departure": "Huế",
+                "destination": "Đà Nẵng",
+                "departureDate": "2025-01-15",
+                "isRoundTrip": false,
+                "numberOfTickets": 2,
+                "confidence": 0.95
+            }
+            """;
     }
 
     /**
