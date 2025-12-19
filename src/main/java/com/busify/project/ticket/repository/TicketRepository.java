@@ -53,6 +53,10 @@ public interface TicketRepository extends JpaRepository<Tickets, Long> {
     @Query("SELECT t FROM Tickets t JOIN t.booking b WHERE b.bookingCode = :bookingCode")
     List<Tickets> findByBookingCode(@Param("bookingCode") String bookingCode);
 
+    // Tìm tất cả tickets theo booking ID
+    @Query("SELECT t FROM Tickets t WHERE t.booking.id = :bookingId")
+    List<Tickets> findByBookingId(@Param("bookingId") Long bookingId);
+
     // Tìm tất cả tickets theo trip ID
     @Query("SELECT t FROM Tickets t JOIN t.booking b WHERE b.trip.id = :tripId")
     List<Tickets> findByTripId(@Param("tripId") Long tripId);

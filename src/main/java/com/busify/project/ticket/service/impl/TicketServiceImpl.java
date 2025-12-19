@@ -69,19 +69,40 @@ public class TicketServiceImpl implements TicketService {
         Bookings booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found with ID: " + bookingId));
 
+        // Kiểm tra xem booking này đã có tickets chưa
+        List<Tickets> existingTickets = ticketRepository.findByBookingId(bookingId);
+        if (!existingTickets.isEmpty()) {
+            System.out.println("WARNING: Tickets already exist for booking ID: " + bookingId + ". Skipping ticket creation.");
+            // Trả về tickets đã tồn tại thay vì tạo mới
+            return existingTickets.stream()
+                    .map(ticketMapper::toTicketResponseDTO)
+                    .collect(Collectors.toList());
+        }
+
         String[] seatNumbers = booking.getSeatNumber().split(",");
+        
+        // Loại bỏ duplicate seats để tránh tạo vé trùng
+        List<String> uniqueSeats = java.util.stream.Stream.of(seatNumbers)
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        if (uniqueSeats.size() < seatNumbers.length) {
+            System.out.println("WARNING: Found duplicate seats in booking. Original: " + seatNumbers.length 
+                    + ", Unique: " + uniqueSeats.size());
+        }
 
         BigDecimal pricePerSeat = booking.getTrip().getPricePerSeat();
         // Sử dụng giá từ booking (đã tính toán) thay vì giá gốc từ trip
         BigDecimal totalAmount = booking.getTotalAmount();
 
-        if (seatNumbers.length > 0) {
-            pricePerSeat = totalAmount.divide(BigDecimal.valueOf(seatNumbers.length), 2, RoundingMode.HALF_UP);
+        if (uniqueSeats.size() > 0) {
+            pricePerSeat = totalAmount.divide(BigDecimal.valueOf(uniqueSeats.size()), 2, RoundingMode.HALF_UP);
         } else {
             pricePerSeat = booking.getTrip().getPricePerSeat(); // fallback
         }
 
-        System.out.println("DEBUG: Total amount: " + totalAmount + ", Seats: " + seatNumbers.length
+        System.out.println("DEBUG: Total amount: " + totalAmount + ", Seats: " + uniqueSeats.size()
                 + ", Price per seat: " + pricePerSeat);
 
         String passengerName;
@@ -107,13 +128,13 @@ public class TicketServiceImpl implements TicketService {
         }
 
         List<Tickets> tickets = new ArrayList<>();
-        for (String seat : seatNumbers) {
+        for (String seat : uniqueSeats) {
             Tickets ticket = new Tickets();
             ticket.setBooking(booking);
             ticket.setPrice(pricePerSeat);
             ticket.setPassengerName(passengerName);
             ticket.setPassengerPhone(passengerPhone);
-            ticket.setSeatNumber(seat.trim());
+            ticket.setSeatNumber(seat);
             ticket.setStatus(TicketStatus.valid);
             ticket.setTicketCode(generateTicketCode());
             ticket.setSellMethod(sellMethod != null ? sellMethod : SellMethod.AUTO);
@@ -129,8 +150,8 @@ public class TicketServiceImpl implements TicketService {
         List<Tickets> savedTickets = ticketRepository.saveAll(tickets);
 
         Long tripId = booking.getTrip().getId();
-        for (String seat : seatNumbers) {
-            tripSeatRepository.upsertSeat(tripId, seat.trim(), "booked");
+        for (String seat : uniqueSeats) {
+            tripSeatRepository.upsertSeat(tripId, seat, "booked");
         }
 
         // Lấy email
