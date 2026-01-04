@@ -108,6 +108,20 @@ public class PaymentServiceImpl implements PaymentService {
             // Tạo payment URL thông qua strategy
             String paymentUrl = strategy.createPaymentUrl(paymentEntity, paymentRequest);
 
+            // Parse QR code and deep link for ZaloPay
+            String qrCode = null;
+            String appDeepLink = null;
+            
+            if (paymentUrl != null && paymentUrl.startsWith("qrcode:")) {
+                // Format: qrcode:{qr_data}|deeplink:{url}
+                String[] parts = paymentUrl.split("\\|deeplink:");
+                if (parts.length == 2) {
+                    qrCode = parts[0].substring("qrcode:".length());
+                    appDeepLink = parts[1];
+                    paymentUrl = null; // Don't redirect, use QR instead
+                }
+            }
+
             // Audit log for payment creation
             try {
                 User currentUser = getCurrentUser();
@@ -135,6 +149,8 @@ public class PaymentServiceImpl implements PaymentService {
                     .paymentId(paymentEntity.getPaymentId())
                     .status(PaymentStatus.pending)
                     .paymentUrl(paymentUrl)
+                    .qrCode(qrCode)
+                    .appDeepLink(appDeepLink)
                     .bookingId(firstBooking.getId())
                     .bookingIds(allBookingIds)
                     .build();

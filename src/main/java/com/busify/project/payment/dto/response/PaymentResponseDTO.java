@@ -22,6 +22,12 @@ public class PaymentResponseDTO {
     
     private String paymentUrl;
     
+    // QR Code for ZaloPay payment (alternative to paymentUrl)
+    private String qrCode;
+    
+    // ZaloPay app deep link
+    private String appDeepLink;
+    
     // Backward compatible - dùng cho 1 booking
     private Long bookingId;
     

@@ -57,7 +57,7 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             long amount = paymentEntity.getAmount().longValue();
             String description = "Thanh toan ve xe buyt cho booking " + paymentEntity.getBooking().getId();
             
-            // Create embed_data with redirect URL
+            // Create embed_data - MINIMAL for localhost testing
             JSONObject embedData = new JSONObject();
             embedData.put("redirecturl", "http://localhost:8080/api/payments/zalopay/return?apptransid=" + appTransId);
             String embedDataJson = embedData.toString();
@@ -118,15 +118,19 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             if (returnCode == 1) {
                 String orderUrl = jsonResponse.getString("order_url");
                 String zpTransToken = jsonResponse.getString("zp_trans_token");
+                String qrCode = jsonResponse.optString("qr_code", "");
                 
                 // Save app_trans_id to payment entity
                 paymentEntity.setPaymentGatewayId(appTransId);
                 paymentRepository.save(paymentEntity);
                 
-                log.info("Created ZaloPay payment URL for payment ID: {}, app_trans_id: {}", 
+                log.info("Created ZaloPay payment with QR for payment ID: {}, app_trans_id: {}", 
                     paymentEntity.getPaymentId(), appTransId);
                 
-                return orderUrl;
+                // IMPORTANT: ZaloPay Sandbox no longer supports web browser redirect
+                // Must use QR Code or deep link to open in ZaloPay app
+                // Return format: qrcode:{qr_data}|deeplink:{url}
+                return "qrcode:" + qrCode + "|deeplink:" + orderUrl;
             } else {
                 String returnMessage = jsonResponse.optString("return_message", "Unknown error");
                 log.error("ZaloPay create order failed - return_code: {}, message: {}", returnCode, returnMessage);
@@ -326,7 +330,7 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
                 log.info("Successfully processed ZaloPay payment via query for: {}", appTransId);
                 return result;
             } else {
-                log.warn("ZaloPay payment not yet completed for: {}, return_code: {}", appTransId, returnCode);
+                log.debug("ZaloPay payment not yet completed for: {}, return_code: {}", appTransId, returnCode);
                 return null;
             }
             
