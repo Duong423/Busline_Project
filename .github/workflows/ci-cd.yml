@@ -1,7 +1,7 @@
 name: Docker Build CI
 on:
   push:
-    branches: [dev]
+    branches: [duong]
     tags:
       - "v*.*.*"
 env:
