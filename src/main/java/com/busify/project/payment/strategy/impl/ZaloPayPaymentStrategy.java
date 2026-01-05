@@ -298,7 +298,7 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
      */
     public PaymentResponseDTO queryAndProcessPayment(String appTransId) {
         try {
-            log.info("Querying ZaloPay payment status for app_trans_id: {}", appTransId);
+            log.debug("Querying ZaloPay payment status for app_trans_id: {}", appTransId);
             
             // Prepare query request
             Map<String, Object> queryOrder = new HashMap<>();
@@ -318,7 +318,7 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             String queryEndpoint = "https://sb-openapi.zalopay.vn/v2/query";
             ResponseEntity<String> response = restTemplate.postForEntity(queryEndpoint, request, String.class);
             
-            log.info("ZaloPay query response: {}", response.getBody());
+            log.debug("ZaloPay query response: {}", response.getBody());
             
             // Parse response
             JSONObject jsonResponse = new JSONObject(response.getBody());
@@ -327,7 +327,7 @@ public class ZaloPayPaymentStrategy implements PaymentStrategy {
             if (returnCode == 1) {
                 // Payment successful - process and return response
                 PaymentResponseDTO result = processPaymentSuccess(appTransId);
-                log.info("Successfully processed ZaloPay payment via query for: {}", appTransId);
+                log.debug("Successfully processed ZaloPay payment via query for: {}", appTransId);
                 return result;
             } else {
                 log.debug("ZaloPay payment not yet completed for: {}, return_code: {}", appTransId, returnCode);

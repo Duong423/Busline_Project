@@ -314,7 +314,7 @@ public class PaymentController {
     @Operation(summary = "Confirm ZaloPay payment status and process if successful")
     public ApiResponse<PaymentResponseDTO> confirmZaloPayPayment(@PathVariable Long paymentId) {
         try {
-            log.info("Confirming ZaloPay payment for payment ID: {}", paymentId);
+            log.debug("Confirming ZaloPay payment for payment ID: {}", paymentId);
             
             // Lấy payment từ DB
             Payment payment = paymentService.getPaymentById(paymentId);
