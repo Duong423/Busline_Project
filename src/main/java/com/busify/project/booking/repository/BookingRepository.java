@@ -114,10 +114,13 @@ public interface BookingRepository extends JpaRepository<Bookings, Long> {
         Optional<Bookings> findByBookingCodeAndCustomerId(String bookingCode, Long customerId);
 
         // Find expired pending bookings for seat release recovery
+        // QUAN TRỌNG: Chỉ cancel booking của trip chưa khởi hành (status = scheduled hoặc on_sell)
+        // Không cancel booking của trip đã departed/delayed/arrived/cancelled
         @Query("SELECT b FROM Bookings b WHERE " +
                         "b.createdAt < :cutoffTime AND " +
                         "(b.payment IS NULL OR b.payment.status = 'pending') AND " +
-                        "b.status NOT IN ('canceled_by_customer', 'canceled_by_operator', 'completed')")
+                        "b.status NOT IN ('canceled_by_customer', 'canceled_by_operator', 'completed') AND " +
+                        "b.trip.status IN ('scheduled', 'on_sell')")
         List<Bookings> findExpiredPendingBookings(@Param("cutoffTime") Instant cutoffTime);
 
         // Cập nhật status của tất cả bookings thành completed khi trip arrived

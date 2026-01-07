@@ -137,7 +137,9 @@ public class SmartChatBotService {
             .content(aiText)
             .searchIntent(intent)
             .trips(trips)
+            .returnTrips(returnTrips.isEmpty() ? null : returnTrips)
             .totalResults(trips.size())
+            .returnTotalResults(returnTrips.isEmpty() ? null : returnTrips.size())
             .needMoreInfo(false)
             .suggestedQuestions(generateSuggestedQuestions(intent))
             .build();
@@ -222,6 +224,20 @@ public class SmartChatBotService {
         if (intent.getDeparture() != null && intent.getDestination() != null) {
             List<TripSearchResultDTO> trips = tripSearchService.searchTrips(intent);
             
+            // Tìm chuyến về nếu là khứ hồi
+            List<TripSearchResultDTO> returnTrips = new ArrayList<>();
+            if (Boolean.TRUE.equals(intent.getIsRoundTrip()) && intent.getReturnDate() != null) {
+                SearchIntentDTO returnIntent = SearchIntentDTO.builder()
+                    .intentType(intent.getIntentType())
+                    .departure(intent.getDestination())
+                    .destination(intent.getDeparture())
+                    .departureDate(intent.getReturnDate())
+                    .numberOfTickets(intent.getNumberOfTickets())
+                    .busType(intent.getBusType())
+                    .build();
+                returnTrips = tripSearchService.searchTrips(returnIntent);
+            }
+            
             if (!trips.isEmpty()) {
                 bookingGuide = "Tôi tìm thấy " + trips.size() + " chuyến phù hợp cho bạn!\n\n" + bookingGuide;
                 
@@ -230,7 +246,9 @@ public class SmartChatBotService {
                     .content(bookingGuide)
                     .searchIntent(intent)
                     .trips(trips)
+                    .returnTrips(returnTrips.isEmpty() ? null : returnTrips)
                     .totalResults(trips.size())
+                    .returnTotalResults(returnTrips.isEmpty() ? null : returnTrips.size())
                     .needMoreInfo(false)
                     .suggestedQuestions(List.of(
                         "Làm sao chọn ghế?",

@@ -36,14 +36,24 @@ public class AIResponseDTO {
     private SearchIntentDTO searchIntent;
     
     /**
-     * Danh sách sản phẩm/chuyến đi tìm được
+     * Danh sách sản phẩm/chuyến đi tìm được (chiều đi)
      */
     private List<TripSearchResultDTO> trips;
     
     /**
-     * Tổng số kết quả
+     * Danh sách chuyến về (cho vé khứ hồi)
+     */
+    private List<TripSearchResultDTO> returnTrips;
+    
+    /**
+     * Tổng số kết quả chiều đi
      */
     private Integer totalResults;
+    
+    /**
+     * Tổng số kết quả chiều về
+     */
+    private Integer returnTotalResults;
     
     /**
      * Có cần thêm thông tin không
