@@ -38,11 +38,20 @@ public class ChatController {
      * Client gửi tin nhắn đến "/app/chat.sendMessage/{roomId}".
      * Server sẽ broadcast tin nhắn đến tất cả client đã đăng ký
      * "/topic/public/{roomId}".
+     * 
+     * ⚠️ LƯU Ý: Client nên XÓA optimistic UI message khi nhận được broadcast từ server
+     * để tránh hiển thị trùng tin nhắn.
      */
     @MessageMapping("/chat.sendMessage/{roomId}")
-    public void sendMessage(@DestinationVariable String roomId, @Payload ChatMessageDTO chatMessage) {
+    public void sendMessage(@DestinationVariable String roomId, @Payload ChatMessageDTO chatMessage,
+            SimpMessageHeaderAccessor headerAccessor) {
+        // Lưu tin nhắn vào database
         ChatMessage savedMessage = chatService.saveMessage(chatMessage, roomId);
+        
+        // Broadcast đến TẤT CẢ clients trong room (kể cả người gửi)
+        // Frontend cần xử lý để không hiển thị trùng
         messagingTemplate.convertAndSend("/topic/public/" + roomId, savedMessage);
+        
         // Thông báo riêng đã được xử lý trong ChatService.saveMessage
     }
 

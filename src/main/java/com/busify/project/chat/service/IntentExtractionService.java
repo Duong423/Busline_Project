@@ -145,8 +145,21 @@ public class IntentExtractionService {
      * Tạo prompt cho AI với hướng dẫn sử dụng ngữ cảnh hội thoại
      */
     private String createIntentExtractionPromptWithContext() {
-        return """
+        // Thêm thông tin ngày hiện tại để AI hiểu "ngày mai", "hôm nay"
+        LocalDate today = LocalDate.now();
+        LocalDate tomorrow = today.plusDays(1);
+        LocalDate dayAfterTomorrow = today.plusDays(2);
+        
+        String prompt = String.format("""
             Bạn là trợ lý trích xuất thông tin đặt vé xe từ cuộc hội thoại với khách hàng.
+            
+            THÔNG TIN NGÀY GIỜ HIỆN TẠI:
+            - Hôm nay: %s (Thứ %s)
+            - Ngày mai: %s (Thứ %s)
+            - Ngày kia: %s (Thứ %s)
+            - Khi khách hàng nói "hôm nay" -> departureDate = "%s"
+            - Khi khách hàng nói "ngày mai" hoặc "mai" -> departureDate = "%s"
+            - Khi khách hàng nói "ngày kia" -> departureDate = "%s"
             
             QUAN TRỌNG - SỬ DỤNG NGỮ CẢNH HỘI THOẠI:
             - Bạn sẽ nhận được LỊCH SỬ HỘI THOẠI trước đó
@@ -202,15 +215,35 @@ public class IntentExtractionService {
                 "numberOfTickets": 2,
                 "confidence": 0.95
             }
-            """;
+            """,
+            today, today.getDayOfWeek().getValue(),
+            tomorrow, tomorrow.getDayOfWeek().getValue(),
+            dayAfterTomorrow, dayAfterTomorrow.getDayOfWeek().getValue(),
+            today, tomorrow, dayAfterTomorrow
+        );
+        
+        return prompt;
     }
 
     /**
      * Tạo prompt cho AI để trích xuất thông tin
      */
     private String createIntentExtractionPrompt() {
-        return """
+        // Thêm thông tin ngày hiện tại
+        LocalDate today = LocalDate.now();
+        LocalDate tomorrow = today.plusDays(1);
+        LocalDate dayAfterTomorrow = today.plusDays(2);
+        
+        return String.format("""
             Bạn là trợ lý trích xuất thông tin đặt vé xe từ câu chat của khách hàng.
+            
+            THÔNG TIN NGÀY GIỜ HIỆN TẠI:
+            - Hôm nay: %s (Thứ %d)
+            - Ngày mai: %s (Thứ %d)
+            - Ngày kia: %s (Thứ %d)
+            - Khi khách hàng nói "hôm nay" -> departureDate = "%s"
+            - Khi khách hàng nói "ngày mai" hoặc "mai" -> departureDate = "%s"
+            - Khi khách hàng nói "ngày kia" -> departureDate = "%s"
             
             Nhiệm vụ: Phân tích câu chat và trích xuất các thông tin sau (nếu có):
             - intentType: SEARCH_TRIP (tìm chuyến), BOOK_TICKET (đặt vé), ASK_PRICE (hỏi giá), ASK_SCHEDULE (hỏi lịch), GENERAL_QUESTION
@@ -286,7 +319,12 @@ public class IntentExtractionService {
                 "intentType": "GENERAL_QUESTION",
                 "confidence": 0.5
             }
-            """;
+            """,
+            today, today.getDayOfWeek().getValue(),
+            tomorrow, tomorrow.getDayOfWeek().getValue(),
+            dayAfterTomorrow, dayAfterTomorrow.getDayOfWeek().getValue(),
+            today, tomorrow, dayAfterTomorrow
+        );
     }
 
     /**

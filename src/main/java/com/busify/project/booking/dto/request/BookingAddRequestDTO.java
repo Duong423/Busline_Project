@@ -37,4 +37,21 @@ public class BookingAddRequestDTO {
     @NotNull
     @PositiveOrZero
     private BigDecimal totalAmount;
+
+    /**
+     * Validates booking constraints for fairness
+     * - Maximum 10 seats per booking to prevent hoarding
+     * - Ensures fair access for all customers
+     */
+    public void validate() {
+        if (seatNumber != null && !seatNumber.trim().isEmpty()) {
+            String[] seats = seatNumber.split(",");
+            if (seats.length > 10) {
+                throw new IllegalArgumentException(
+                    "Để đảm bảo công bằng, mỗi lần đặt vé chỉ được phép đặt tối đa 10 ghế. "
+                    + "Bạn đang cố đặt " + seats.length + " ghế. "
+                    + "Vui lòng chia nhỏ đơn đặt vé hoặc liên hệ hotline để hỗ trợ.");
+            }
+        }
+    }
 }

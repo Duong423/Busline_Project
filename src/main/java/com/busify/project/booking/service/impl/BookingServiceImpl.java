@@ -153,6 +153,9 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingAddResponseDTO addBooking(BookingAddRequestDTO request) {
 
+        // Validate fairness constraints (max seats per booking)
+        request.validate();
+
         String email = jwtUtil.getCurrentUserLogin()
                 .orElseThrow(() -> new BookingAuthenticationException(
                         "User not authenticated. Please login to make a booking."));
@@ -238,6 +241,9 @@ public class BookingServiceImpl implements BookingService {
 
     @Transactional
     public BookingAddResponseDTO addBookingManual(BookingAddRequestDTO request) {
+
+        // Validate fairness constraints (max seats per booking)
+        request.validate();
 
         String email = jwtUtil.getCurrentUserLogin()
                 .orElseThrow(() -> new BookingAuthenticationException(

@@ -1,6 +1,8 @@
 package com.busify.project.chat.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.busify.project.chat.util.FlexibleTimestampDeserializer;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +20,8 @@ public class ChatMessageDTO {
     private String recipient; // Dùng cho chat 1-1
     private MessageType type;
     private String roomId;
+    
+    @JsonDeserialize(using = FlexibleTimestampDeserializer.class)
     private Long timestamp; // Sử dụng timestamp dạng Long (milliseconds) để tương thích với WebSocket
 
     public enum MessageType {

@@ -4,6 +4,8 @@ import com.busify.project.route.dto.response.PopularRouteResponse;
 import com.busify.project.route.dto.response.RouteResponse;
 import com.busify.project.route.dto.response.TopRouteRevenueDTO;
 import com.busify.project.route.service.RouteService;
+import com.busify.project.trip.dto.response.TripStopResponse;
+import com.busify.project.trip.service.impl.TripServiceImpl;
 import com.busify.project.common.dto.response.ApiResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +28,7 @@ import java.util.List;
 @Tag(name = "Route", description = "Route API")
 public class RouteController {
     private final RouteService routeService;
+    private final TripServiceImpl tripService;
 
     @GetMapping("/popular-routes")
     @Operation(summary = "Get popular routes")
@@ -58,5 +62,22 @@ public class RouteController {
     }
 
     // Admin endpoint: Top 10 trips có doanh thu cao nhất
+    
+    /**
+     * Endpoint for frontend compatibility
+     * GET /api/routes/trip/{tripId}/stop-locations
+     * Returns stop locations for a specific trip
+     */
+    @GetMapping("/trip/{tripId}/stop-locations")
+    @Operation(summary = "Get stop locations for a trip", 
+               description = "Returns all stop locations for the specified trip ID")
+    public ApiResponse<List<TripStopResponse>> getTripStopLocations(@PathVariable Long tripId) {
+        try {
+            List<TripStopResponse> tripStops = tripService.getTripStopsById(tripId);
+            return ApiResponse.success("Lấy thông tin các điểm dừng của chuyến đi thành công", tripStops);
+        } catch (Exception e) {
+            return ApiResponse.internalServerError("Đã xảy ra lỗi khi lấy thông tin các điểm dừng: " + e.getMessage());
+        }
+    }
 
 }
